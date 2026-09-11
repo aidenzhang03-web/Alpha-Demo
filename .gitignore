@@ -1,0 +1,28 @@
+﻿# ===== Unreal Engine 生成物 =====
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# ===== IDE / 编辑器工程文件（自动生成）=====
+*.sln
+*.slnx
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+.vs/
+.vscode/
+.idea/
+*.xcodeproj/
+*.xcworkspace/
+
+# ===== 其他 =====
+*.autosave
+*.pdb
+*.obj
+
+# ===== 资产体积过大，先不入库 =====
+Content/
