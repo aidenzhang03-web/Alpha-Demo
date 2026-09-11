@@ -2,7 +2,7 @@
 
 
 #include "Animation/AlphaAnimNotifyState.h"
-#include "Player/PlayerMaster.h"
+#include "Animation/AnimEventReceiver.h"
 
 void UAlphaAnimNotifyState::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation,
     float TotalDuration, const FAnimNotifyEventReference& EventReference)
@@ -10,11 +10,9 @@ void UAlphaAnimNotifyState::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimS
     Super::NotifyBegin(MeshComp, Animation, TotalDuration, EventReference);
 
     if (!MeshComp) return;
-    // 统一转发给 PlayerMaster 分发（进入状态）
-    if (APlayerMaster* Player = Cast<APlayerMaster>(MeshComp->GetOwner()))
-    {
-        Player->HandleAnimStateBegin(StateType);
-    }
+    // 统一转发给「动画事件接收器」（进入状态）
+    if (IAnimEventReceiver* Receiver = Cast<IAnimEventReceiver>(MeshComp->GetOwner()))
+        Receiver->HandleAnimStateBegin(StateType);
 }
 
 void UAlphaAnimNotifyState::NotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation,
@@ -23,10 +21,8 @@ void UAlphaAnimNotifyState::NotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSeq
     Super::NotifyEnd(MeshComp, Animation, EventReference);
 
     if (!MeshComp) return;
-    // 统一转发给 PlayerMaster 分发（退出状态）
-    if (APlayerMaster* Player = Cast<APlayerMaster>(MeshComp->GetOwner()))
-    {
-        Player->HandleAnimStateEnd(StateType);
-    }
+    // 统一转发给「动画事件接收器」（退出状态）
+    if (IAnimEventReceiver* Receiver = Cast<IAnimEventReceiver>(MeshComp->GetOwner()))
+        Receiver->HandleAnimStateEnd(StateType);
 }
 

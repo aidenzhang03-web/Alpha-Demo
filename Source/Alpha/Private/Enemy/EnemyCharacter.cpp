@@ -3,6 +3,9 @@
 #include "AI/EnemyAIController.h"
 #include "Weapon/WeaponComponent.h"
 #include "Combat/AlphaAttributeComponent.h"
+#include "Combat/GA_EnemyAttack.h"
+#include "Animation/AlphaAnimNotify.h"
+#include "Animation/AlphaAnimNotifyState.h"
 
 #include "Components/WidgetComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -47,6 +50,10 @@ void AEnemyCharacter::BeginPlay()
 	if (AbilitySystemComponent)
 	{
 		AbilitySystemComponent->InitAbilityActorInfo(this, this);
+
+		if (AttackAbilityClass)
+			AbilitySystemComponent->GiveAbility(
+				FGameplayAbilitySpec(AttackAbilityClass, 1, INDEX_NONE, this));
 
 		// 监听血量变化：归零触发死亡（必须在 InitAbilityActorInfo 之后，AttributeSet 才已注册）
 		if (const UAlphaAttributeSet* AttrSet = AbilitySystemComponent->GetSet<UAlphaAttributeSet>())
@@ -134,4 +141,53 @@ void AEnemyCharacter::Die()
 
 	// 倒地后几秒销毁尸体（按需打开）
 	 SetLifeSpan(3.f);
+}
+
+
+// 单帧动画事件
+void AEnemyCharacter::HandleAnimEvent(EAnimEventType EventType)
+{
+	switch (EventType)
+	{
+		// ======== 拔出/收起武器（与玩家同一套逻辑）========
+	case EAnimEventType::WeaponAttachHand:
+		if (WeaponComponent) WeaponComponent->AttachWeaponToHand();
+		break;
+
+	case EAnimEventType::WeaponAttachBack:
+		if (WeaponComponent) WeaponComponent->AttachWeaponToBack();
+		break;
+	default:
+		break;
+	}
+}
+
+
+// 区间动画状态：进入
+void AEnemyCharacter::HandleAnimStateBegin(EAnimNotifyStateType StateType)
+{
+	switch (StateType)
+	{
+	case EAnimNotifyStateType::AttackHitWindow:
+		// 攻击命中窗口打开：开启武器碰撞盒
+		if (WeaponComponent) WeaponComponent->EnableWeaponHitbox();
+		break;
+	default:
+		break;
+	}
+}
+
+
+// 区间动画状态：退出
+void AEnemyCharacter::HandleAnimStateEnd(EAnimNotifyStateType StateType)
+{
+	switch (StateType)
+	{
+	case EAnimNotifyStateType::AttackHitWindow:
+		// 攻击命中窗口关闭：关闭武器碰撞盒
+		if (WeaponComponent) WeaponComponent->DisableWeaponHitbox();
+		break;
+	default:
+		break;
+	}
 }

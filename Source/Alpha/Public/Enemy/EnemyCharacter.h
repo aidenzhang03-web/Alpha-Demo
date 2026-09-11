@@ -6,17 +6,19 @@
 #include "AbilitySystemComponent.h"
 #include "Combat/AlphaAttributeSet.h"
 #include "Components/WidgetComponent.h"
+#include "Animation/AnimEventReceiver.h"
 #include "EnemyCharacter.generated.h"
 
 class UEnemyHealthBarWidget;
 struct FOnAttributeChangeData;
 class UWeaponComponent;
 class UAlphaAttributeComponent;
+class UGA_EnemyAttack;
 
 // 敌人基类：实现 GAS 接口，挂 ASC + 属性集，作为攻击命中的受击目标。
 
 UCLASS()
-class ALPHA_API AEnemyCharacter : public ACharacter, public IAbilitySystemInterface
+class ALPHA_API AEnemyCharacter : public ACharacter, public IAbilitySystemInterface, public IAnimEventReceiver
 {
 	GENERATED_BODY()
 
@@ -29,6 +31,17 @@ public:
 	// 死亡：血量为 0 时触发（变成布娃娃）
 	UFUNCTION(BlueprintCallable, Category = "Enemy")
 	void Die();
+
+	UFUNCTION(BlueprintCallable, Category = "Weapon")
+	UWeaponComponent* GetWeaponComponent() const { return WeaponComponent; }
+
+
+	// ===== IAnimEventReceiver 实现 =====
+	virtual void HandleAnimEvent(EAnimEventType EventType) override;
+	virtual void HandleAnimStateBegin(EAnimNotifyStateType StateType) override;
+	virtual void HandleAnimStateEnd(EAnimNotifyStateType StateType) override;
+
+
 
 protected:
 	virtual void BeginPlay() override;
@@ -57,6 +70,10 @@ protected:
 	// 属性组件（GE 伤害应用入口，敌人攻击时用）
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS")
 	TObjectPtr<UAlphaAttributeComponent> AttributeComponent;
+
+	// 攻击能力类（在 BP_Enemy_Mannequin 里指定 BP_GA_EnemyAttack）
+	UPROPERTY(EditDefaultsOnly, Category = "Combat")
+	TSubclassOf<UGA_EnemyAttack> AttackAbilityClass;
 
 private:
 

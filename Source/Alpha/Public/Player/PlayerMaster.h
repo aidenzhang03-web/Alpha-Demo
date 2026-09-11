@@ -9,6 +9,7 @@
 #include "Weapon/WeaponComponent.h" //武器组件类
 #include "Animation/AlphaAnimNotify.h" // 动画事件通知（提供 EAnimEventType 枚举类型）
 #include "Animation/AlphaAnimNotifyState.h" // 动画状态通知（提供 EAnimNotifyStateType 枚举类型）
+#include "Animation/AnimEventReceiver.h"     // 动画事件接收器
 
 #include "AbilitySystemInterface.h"      
 #include "AbilitySystemComponent.h" 
@@ -47,7 +48,7 @@ enum class ETurnDirection : uint8
 
 
 UCLASS()
-class ALPHA_API APlayerMaster : public ACharacter, public IAbilitySystemInterface
+class ALPHA_API APlayerMaster : public ACharacter, public IAbilitySystemInterface, public IAnimEventReceiver
 {
 	GENERATED_BODY()
 
@@ -80,7 +81,7 @@ public:
 	bool GetWeaponIsDrawn() const { return WeaponComponent && WeaponComponent->IsWeaponDrawn(); }
 
 	UFUNCTION(BlueprintCallable, Category = "Weapon")
-	void HandleAnimEvent(EAnimEventType EventType);  // 动画事件统一分发入口（由 UAnimNotify_AnimEvent 在动画特定帧调用）
+	void HandleAnimEvent(EAnimEventType EventType) override;  // 动画事件统一分发入口（由 UAnimNotify_AnimEvent 在动画特定帧调用）
 
 
 	// ======== 角色属性集Getter ========
@@ -118,8 +119,8 @@ public:
 	void DealDamageToTarget(AActor* Target, float Amount);
 
 	// 动画状态统一分发入口（区间型状态：进入/退出，由 UAnimNotifyState_AnimEvent 调用）
-	void HandleAnimStateBegin(EAnimNotifyStateType StateType);
-	void HandleAnimStateEnd(EAnimNotifyStateType StateType);
+	void HandleAnimStateBegin(EAnimNotifyStateType StateType) override;
+	void HandleAnimStateEnd(EAnimNotifyStateType StateType) override;
 
 protected:
 	// Called when the game starts or when spawned

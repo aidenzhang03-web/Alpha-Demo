@@ -28,4 +28,8 @@ namespace AlphaGameplayTags
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Attribute_ManaCost);    // 法力消耗量
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Attribute_StaminaCost); // 耐力消耗量
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Attribute_StaminaDrain);  // 持续扣耐力（每周期量）
+
+    // 敌人能力
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_EnemyAttack);  // 敌人攻击能力
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Attacking);      // 攻击进行中
 }

@@ -23,4 +23,7 @@ namespace AlphaGameplayTags
     UE_DEFINE_GAMEPLAY_TAG(Attribute_ManaCost, "Attribute.ManaCost");
     UE_DEFINE_GAMEPLAY_TAG(Attribute_StaminaCost, "Attribute.StaminaCost");
     UE_DEFINE_GAMEPLAY_TAG(Attribute_StaminaDrain, "Attribute.StaminaDrain");
+
+    UE_DEFINE_GAMEPLAY_TAG(Ability_EnemyAttack, "Ability.EnemyAttack");
+    UE_DEFINE_GAMEPLAY_TAG(State_Attacking, "State.Attacking");
 }
