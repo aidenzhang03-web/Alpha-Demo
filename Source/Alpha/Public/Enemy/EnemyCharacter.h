@@ -14,6 +14,7 @@ struct FOnAttributeChangeData;
 class UWeaponComponent;
 class UAlphaAttributeComponent;
 class UGA_EnemyAttack;
+class UGA_HitReact;
 
 // 敌人基类：实现 GAS 接口，挂 ASC + 属性集，作为攻击命中的受击目标。
 
@@ -34,6 +35,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Weapon")
 	UWeaponComponent* GetWeaponComponent() const { return WeaponComponent; }
+
+	// 是否已死亡（受击结束恢复移动时据此跳过，避免与布娃娃冲突）
+	bool IsDead() const { return bDead; }
 
 
 	// ===== IAnimEventReceiver 实现 =====
@@ -74,6 +78,10 @@ protected:
 	// 攻击能力类（在 BP_Enemy_Mannequin 里指定 BP_GA_EnemyAttack）
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")
 	TSubclassOf<UGA_EnemyAttack> AttackAbilityClass;
+
+	// 受击反应能力类（在 BP_Enemy_Mannequin 里指定 BP_GA_HitReact）
+	UPROPERTY(EditDefaultsOnly, Category = "Combat")
+	TSubclassOf<UGA_HitReact> HitReactAbilityClass;
 
 private:
 

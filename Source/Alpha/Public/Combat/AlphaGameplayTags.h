@@ -32,4 +32,9 @@ namespace AlphaGameplayTags
     // 敌人能力
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_EnemyAttack);  // 敌人攻击能力
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Attacking);      // 攻击进行中
+
+    // 敌人受击反馈
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_HitReact);     // 受击事件（触发 UGA_HitReact）
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_HitReact);   // 受击能力标签（供 CancelAbilitiesWithTag 匹配）
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_HitReact);     // 受击进行中（防抖 + 移动锁）
 }

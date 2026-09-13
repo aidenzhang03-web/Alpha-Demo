@@ -3,7 +3,9 @@
 #include "AI/EnemyAIController.h"
 #include "Weapon/WeaponComponent.h"
 #include "Combat/AlphaAttributeComponent.h"
+#include "Combat/AlphaGameplayTags.h"
 #include "Combat/GA_EnemyAttack.h"
+#include "Combat/GA_HitReact.h"
 #include "Animation/AlphaAnimNotify.h"
 #include "Animation/AlphaAnimNotifyState.h"
 
@@ -55,6 +57,10 @@ void AEnemyCharacter::BeginPlay()
 			AbilitySystemComponent->GiveAbility(
 				FGameplayAbilitySpec(AttackAbilityClass, 1, INDEX_NONE, this));
 
+		if (HitReactAbilityClass)
+			AbilitySystemComponent->GiveAbility(
+				FGameplayAbilitySpec(HitReactAbilityClass, 1, INDEX_NONE, this));
+
 		// 监听血量变化：归零触发死亡（必须在 InitAbilityActorInfo 之后，AttributeSet 才已注册）
 		if (const UAlphaAttributeSet* AttrSet = AbilitySystemComponent->GetSet<UAlphaAttributeSet>())
 		{
@@ -63,6 +69,7 @@ void AEnemyCharacter::BeginPlay()
 		}
 
 	}
+
 
 	// 初始化头顶血条：确保 Widget 已按指定类创建
 	if (HealthBarComponent && HealthBarWidgetClass)
@@ -75,9 +82,11 @@ void AEnemyCharacter::BeginPlay()
 		}
 	}
 
+
 	// 开局生成武器并挂到背部插槽
 	if (WeaponComponent)
 		WeaponComponent->SpawnAndAttachWeapon();
+
 
 	// 拿到血条 Widget 实例，绑定 ASC 监听血量变化
 	if (UEnemyHealthBarWidget* Bar = Cast<UEnemyHealthBarWidget>(
@@ -96,6 +105,20 @@ UAbilitySystemComponent* AEnemyCharacter::GetAbilitySystemComponent() const
 // 血量变化回调：归零触发死亡
 void AEnemyCharacter::OnHealthChanged(const FOnAttributeChangeData& Data)
 {
+	if (bDead) return;   // 已死亡，忽略死亡后的残余事件
+
+	// 掉血且未致死 → 发受击事件，由 UGA_HitReact 监听并播放受击动画
+	if (Data.NewValue < Data.OldValue && Data.NewValue > 0.f)
+	{
+		FGameplayEventData Payload;
+		Payload.EventTag = AlphaGameplayTags::Event_HitReact;
+		Payload.Target = this;
+		Payload.Instigator = this;
+		Payload.EventMagnitude = Data.OldValue - Data.NewValue;   // 本次伤害量（预留：可用于分段受击）
+		AbilitySystemComponent->HandleGameplayEvent(AlphaGameplayTags::Event_HitReact, &Payload);
+	}
+
+	// 归零 → 死亡（放在受击判定之后，且用 > 0 卡掉致死那一下的受击）
 	if (Data.NewValue <= 0.f)
 		Die();
 }
