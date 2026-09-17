@@ -8,6 +8,9 @@ UGA_EnemyAttack::UGA_EnemyAttack()
 {
 	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
 
+	// 敌人 AI 只存在于服务器（AIController 不复制）→ 能力只在服务器跑。
+	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
+
 	// 能力标签（便于按标签取消/查询）
 	FGameplayTagContainer AbilityAssetTags;
 	AbilityAssetTags.AddTag(AlphaGameplayTags::Ability_EnemyAttack);

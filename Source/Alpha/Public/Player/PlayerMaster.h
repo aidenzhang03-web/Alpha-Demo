@@ -62,6 +62,9 @@ public:
 	// 重写IAbilitySystemInterface：让外部拿到 ASC
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 
+	/** 属性复制注册：把移动档位同步给客户端。 */
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 	UFUNCTION(BlueprintCallable, Category = "Animation")
 	bool GetIsMoving() const { return bIsMoving; }
 
@@ -126,6 +129,8 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
+	// 移动档位（权威状态）。复制到所有客户端，供远端角色的动画层读取档位
+	UPROPERTY(Replicated)
 	EMoveSpeedState MoveSpeedState = EMoveSpeedState::Run;    // 默认为跑步状态
 
 	// 移动状态变量

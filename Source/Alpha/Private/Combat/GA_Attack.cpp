@@ -10,6 +10,9 @@ UGA_Attack::UGA_Attack()
     // 连招全程存活，状态挂在实例成员上
     InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
 
+    // 连招是玩家主动输入 → 本地预测执行：客户端立即响应，服务器复核。两端各跑一份 ActivateAbility，各自管理自己的连招状态机
+    NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
+
     // 能力标签
     FGameplayTagContainer AbilityAssetTags;
     AbilityAssetTags.AddTag(AlphaGameplayTags::Ability_Combo);

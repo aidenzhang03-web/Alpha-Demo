@@ -1,6 +1,7 @@
 ﻿#include "Combat/AlphaAttributeComponent.h"
 #include "Combat/AlphaAttributeSet.h"
 #include "Combat/AlphaGameplayTags.h"
+#include "GameFramework/Actor.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"
 #include "GameplayEffect.h"
@@ -42,6 +43,9 @@ FActiveGameplayEffectHandle UAlphaAttributeComponent::ApplyEffectToSelf(
 {
     if (!CachedASC || !EffectClass) return FActiveGameplayEffectHandle();
 
+    // 根防线 1：属性修改只能在服务器进行（GE 不会在客户端产生权威结果）。
+    if (!GetOwner() || !GetOwner()->HasAuthority()) return FActiveGameplayEffectHandle();
+
     FGameplayEffectContextHandle Context = CachedASC->MakeEffectContext();
     Context.AddSourceObject(GetOwner());
 
@@ -64,6 +68,9 @@ FActiveGameplayEffectHandle UAlphaAttributeComponent::ApplyEffectToTarget(
     FGameplayTag SetByCallerTag, float SetByCallerValue)
 {
     if (!CachedASC || !EffectClass || !Target) return FActiveGameplayEffectHandle();
+
+    // 根防线 2：伤害结算只能在服务器进行。
+    if (!GetOwner() || !GetOwner()->HasAuthority()) return FActiveGameplayEffectHandle();
 
     // 目标必须实现 GAS 接口，且有自己的 ASC
     IAbilitySystemInterface* TargetInterface = Cast<IAbilitySystemInterface>(Target);

@@ -41,6 +41,15 @@ AEnemyCharacter::AEnemyCharacter()
 	// 武器组件 + 属性组件
 	WeaponComponent = CreateDefaultSubobject<UWeaponComponent>(TEXT("WeaponComponent"));
 	AttributeComponent = CreateDefaultSubobject<UAlphaAttributeComponent>(TEXT("AttributeComponent"));
+
+
+	// ======== 联机复制配置========
+	bReplicates = true;
+	SetReplicateMovement(true);
+	AbilitySystemComponent->SetIsReplicated(true);
+	// MVP 阶段先用 Mixed，保证所有客户端都能看到血条；
+	// 后续压带宽可把敌人的改成 Minimal（属性仍会复制，只是不同步 GE 明细）。
+	AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
 }
 
 void AEnemyCharacter::BeginPlay()
@@ -105,6 +114,10 @@ UAbilitySystemComponent* AEnemyCharacter::GetAbilitySystemComponent() const
 // 血量变化回调：归零触发死亡
 void AEnemyCharacter::OnHealthChanged(const FOnAttributeChangeData& Data)
 {
+	// 该回调在客户端也会被 OnRep_Health 触发，
+	// 但受击事件必须由服务器发，否则 GA_HitReact 会在两端各激活一次。
+	if (!HasAuthority()) return;
+
 	if (bDead) return;   // 已死亡，忽略死亡后的残余事件
 
 	// 掉血且未致死 → 发受击事件，由 UGA_HitReact 监听并播放受击动画
@@ -124,10 +137,28 @@ void AEnemyCharacter::OnHealthChanged(const FOnAttributeChangeData& Data)
 }
 
 
-// 死亡：停止移动、关闭胶囊体、开启骨骼物理（布娃娃）
+// 死亡：服务器权威入口，只负责判定 + 广播，不直接做表现
 void AEnemyCharacter::Die()
 {
+	// 只有服务器能判定死亡。客户端的 OnHealthChanged 也会走到这里（属性复制触发），
+	// 但它必须等服务器的 Multi_Die 广播，避免两端各自决定死亡时机。
+	if (!HasAuthority()) return;
 	if (bDead) return;
+
+	bDead = true;
+
+	// 表现广播到所有端（含服务器自己）
+	Multi_Die();
+
+	// 生命周期只由服务器管理：客户端设 LifeSpan 会与服务器的销毁复制相互打架
+	SetLifeSpan(3.f);
+}
+
+
+// 死亡表现：每个端各自执行（布娃娃 / 碰撞 / UI 都是本地状态）
+void AEnemyCharacter::Multi_Die_Implementation()
+{
+	// 客户端也置位：阻止客户端 OnHealthChanged 的后续处理（受击/重复死亡）
 	bDead = true;
 
 	// 1. 停止并禁用移动（否则角色会继续站立/移动）
@@ -138,32 +169,29 @@ void AEnemyCharacter::Die()
 		Move->SetComponentTickEnabled(false);
 	}
 
-	// 2. 关闭胶囊体碰撞（否则胶囊体还撑着角色、挡子弹/攻击）
+	// 2. 关闭胶囊体碰撞（否则胶囊体还撑着角色、挡攻击）
 	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
 	{
 		Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	}
 
-	// 3. 开启骨骼网格体物理模拟（布娃娃核心）
+	// 3. 布娃娃
 	if (USkeletalMeshComponent* MeshComp = GetMesh())
 	{
-		MeshComp->SetCollisionProfileName(TEXT("Ragdoll"));  // 改用 Ragdoll 碰撞预设，让骨骼体与地面 Block
-		MeshComp->SetSimulatePhysics(true);              // 开启物理模拟
-		MeshComp->SetAllBodiesSimulatePhysics(true);     // 所有骨骼体都模拟
-		MeshComp->WakeAllRigidBodies();                  // 唤醒刚体，防止“睡着”
+		MeshComp->SetCollisionProfileName(TEXT("Ragdoll"));
+		MeshComp->SetSimulatePhysics(true);
+		MeshComp->SetAllBodiesSimulatePhysics(true);
+		MeshComp->WakeAllRigidBodies();
 	}
 
-	// 4. 隐藏头顶血条（死亡后不再显示）
+	// 4. 隐藏头顶血条
 	if (HealthBarComponent)
 	{
 		HealthBarComponent->SetVisibility(false);
 	}
 
-	// 5. 关闭自身 Tick（死亡后无需再更新）
+	// 5. 关闭 Tick
 	SetActorTickEnabled(false);
-
-	// 倒地后几秒销毁尸体（按需打开）
-	 SetLifeSpan(3.f);
 }
 
 
@@ -193,6 +221,8 @@ void AEnemyCharacter::HandleAnimStateBegin(EAnimNotifyStateType StateType)
 	{
 	case EAnimNotifyStateType::AttackHitWindow:
 		// 攻击命中窗口打开：开启武器碰撞盒
+		// 命中判定必须权威：只有服务器开 Hitbox 才能命中目标并施加 GE。
+		if (!HasAuthority()) break;
 		if (WeaponComponent) WeaponComponent->EnableWeaponHitbox();
 		break;
 	default:
@@ -208,6 +238,7 @@ void AEnemyCharacter::HandleAnimStateEnd(EAnimNotifyStateType StateType)
 	{
 	case EAnimNotifyStateType::AttackHitWindow:
 		// 攻击命中窗口关闭：关闭武器碰撞盒
+		if (!HasAuthority()) break;
 		if (WeaponComponent) WeaponComponent->DisableWeaponHitbox();
 		break;
 	default:

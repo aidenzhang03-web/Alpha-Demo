@@ -103,8 +103,13 @@ void UPlayerAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// 获取玩家速度
 	MovementSpeed = FullVelocity.Size2D();
 
-	// 从玩家角色获取移动状态
-	bIsMoving = Player->GetIsMoving(); 
+	// 【联机】移动状态来源按「本地 / 远端」分流：
+	// - 本地（AutonomousProxy）：用输入层 bIsMoving —— 松键立即 false，无延迟。
+	// - 远端（SimulatedProxy）：输入层状态在本端永远是 false，改用实际速度派生。
+	const bool bLocallyControlled = Player->IsLocallyControlled();
+	bIsMoving = bLocallyControlled
+		? Player->GetIsMoving()
+		: (MovementSpeed > StopMoveExitSpeed);
 
 	bIsTurning = Player->GetIsTurning();
 	TurnDirection = Player->GetTurnDirection();

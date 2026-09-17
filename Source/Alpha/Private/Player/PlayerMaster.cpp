@@ -3,6 +3,7 @@
 
 #include "Player/PlayerMaster.h"
 #include "Math/UnrealMathUtility.h"
+#include "Net/UnrealNetwork.h"
 
 // 角色移动组件
 #include "GameFramework/CharacterMovementComponent.h"
@@ -81,6 +82,23 @@ APlayerMaster::APlayerMaster()
 
 	// 创建属性组件（GE 应用统一入口）
 	AttributeComponent = CreateDefaultSubobject<UAlphaAttributeComponent>(TEXT("AttributeComponent"));
+
+
+	// ======== 联机复制配置 ========
+	// 1) Actor 自身参与复制。不开这一行，整个角色对其他客户端不可见。
+	bReplicates = true;
+
+	// 2) 移动复制。UE5 中 bReplicateMovement 已私有化，必须走 Setter。
+	SetReplicateMovement(true);
+
+	// 2) ASC 参与复制。不开则 AttributeSet / GameplayTag 都不会同步，
+	//    远处客户端看到的永远是初始值（血条不动）。
+	AbilitySystemComponent->SetIsReplicated(true);
+
+	// 3) 复制模式：
+	//    Mixed = 属性值同步给所有人（别人能看到血条），GE 明细只同步给 Owner（省带宽）。
+	AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
+
 }
 
 // Called when the game starts or when spawned
@@ -120,11 +138,17 @@ void APlayerMaster::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
 
+	// 联机下服务器端此时 Controller 才就绪，重新初始化一次 ActorInfo
+	if (AbilitySystemComponent)
+		AbilitySystemComponent->InitAbilityActorInfo(this, this);
+
 	// 创建 HUD Widget
 	if (HUDWidgetClass)
 	{
 		if (APlayerController* PC = Cast<APlayerController>(GetController()))
 		{
+			if (!PC->IsLocalController()) return;   // CreateWidget 必须限定本地控制器，否则非本地 PC 上创建 Widget 会失败/告警。
+
 			HUDWidget = CreateWidget<UPlayerHUDWidget>(PC, HUDWidgetClass);
 			if (HUDWidget)
 			{
@@ -138,6 +162,15 @@ void APlayerMaster::PossessedBy(AController* NewController)
 UAbilitySystemComponent* APlayerMaster::GetAbilitySystemComponent() const
 {
 	return AbilitySystemComponent;
+}
+
+void APlayerMaster::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	// 档位是离散枚举、变化频率极低 → 默认复制条件即可，带宽可忽略。
+	// 注意不要用 COND_OwnerOnly：远端角色需要它来选动画。
+	DOREPLIFETIME(APlayerMaster, MoveSpeedState);
 }
 
 // Called every frame需要时启用
@@ -399,6 +432,8 @@ void APlayerMaster::HandleAnimStateBegin(EAnimNotifyStateType StateType)
 
 	case EAnimNotifyStateType::AttackHitWindow:
 		// 攻击命中窗口打开：开启武器碰撞盒
+		// 命中判定必须权威：只有服务器开 Hitbox 才能命中目标并施加 GE。
+		if (!HasAuthority()) break;
 		if (WeaponComponent) WeaponComponent->EnableWeaponHitbox();
 		break;
 
@@ -441,6 +476,7 @@ void APlayerMaster::HandleAnimStateEnd(EAnimNotifyStateType StateType)
 
 	case EAnimNotifyStateType::AttackHitWindow:
 		// 攻击命中窗口关闭：关闭武器碰撞盒
+		if (!HasAuthority()) break;
 		if (WeaponComponent) WeaponComponent->DisableWeaponHitbox();
 		break;
 

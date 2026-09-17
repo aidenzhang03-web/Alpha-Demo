@@ -33,6 +33,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Enemy")
 	void Die();
 
+	// 死亡表现广播：布娃娃物理不参与复制，必须让每个端各自执行一次。
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_Die();
+
 	UFUNCTION(BlueprintCallable, Category = "Weapon")
 	UWeaponComponent* GetWeaponComponent() const { return WeaponComponent; }
 
