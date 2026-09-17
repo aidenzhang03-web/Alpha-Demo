@@ -1,4 +1,4 @@
-# Alpha
+﻿# Alpha
 
 > 基于 **Unreal Engine 5.8 + C++** 开发的第三人称动作游戏 Demo。
 > 移动动画由 **Motion Matching（Pose Search）** 驱动，战斗与属性系统基于 **GAS（Gameplay Ability System）** 实现。
@@ -14,6 +14,7 @@
 | 动画 | Motion Matching（Pose Search）+ Chooser |
 | 能力系统 | Gameplay Ability System（GAS） |
 | AI | Behavior Tree · Blackboard · Navigation System |
+| 网络 | Actor / 属性复制 + 服务器权威判定（GAS） |
 | 版本管理 | Git + Git LFS |
 
 ---
@@ -53,12 +54,21 @@
 ### 敌人
 - 实现 GAS 接口，挂载 ASC + 属性集
 - 头顶血条（事件驱动，非 Tick 轮询）
-- 死亡布娃娃 + 尸体自动销毁
-- 行为树随机巡逻（导航系统取可达点）
+- 视觉感知（AIPerception）→ 黑板写目标 → 行为树追击 / 攻击（攻击能力 `GA_EnemyAttack`）
+- 受击反馈：打断当前攻击、受击期间锁移动防滑步、致死直接布娃娃（`GA_HitReact`）
+- 死亡布娃娃 + 尸体自动销毁（`Multi_Die` 多播广播表现）
 
 ### 武器
 - 组件化多武器切换（配置驱动，新增武器无需改动组件代码）
 - 收拔刀动画 + 骨骼过滤混合（站立全身播放 / 移动仅上半身）
+
+### 网络（Replication）
+- Actor 与移动复制；ASC 开启复制（`Mixed` 模式：属性同步给所有客户端，GE 明细只给 Owner）
+- 属性集通过 `GetLifetimeReplicatedProps` + `OnRep_*` 同步，血条跨端一致
+- **服务器权威**：命中判定仅在服务器开关 Hitbox；属性应用设有 `HasAuthority` 根防线
+- 能力网络策略：连招 `LocalPredicted`、敌人攻击 `ServerOnly`
+- 敌人死亡拆分为权威判定 + `Multi_Die()`（NetMulticast Reliable）表现广播
+- 远端角色动画按 `IsLocallyControlled()` 分流，修正 SimulatedProxy 误播 Idle
 
 ---
 
@@ -109,7 +119,7 @@ Alpha/
 1. 安装 **Unreal Engine 5.8**。
 2. 克隆仓库：
    ```bash
-   git clone <仓库地址>
+   git clone https://github.com/aidenzhang03-web/Alpha-Demo.git
    ```
 3. **准备游戏资产**（重要）：
    由于体积原因（约 4.1 GB），以下第三方素材包**未纳入版本库**，需自行准备并放入 `Content/` 目录：
@@ -147,13 +157,13 @@ Alpha/
 - [x] GAS 连招系统（基础 4 段 + 衍生 2 段）
 - [x] 攻击命中判定 + GameplayEffect 伤害结算
 - [x] 属性系统（生命 / 法力 / 耐力）
-- [x] 敌人：血条 / 受击 / 死亡布娃娃 / 巡逻 AI
+- [x] 敌人：血条 / 受击 / 死亡布娃娃 / 感知追击与攻击 AI
 - [x] 多武器切换与收拔刀
 - [x] 数据驱动脚步音效
+- [x] 网络复制与服务器权威（Actor / 属性 / 能力）
 
 **计划中**
-- [ ] 敌人战斗 AI（感知玩家 → 追击 → 攻击）
-- [ ] 敌人攻击玩家 / 玩家受击与死亡
+- [ ] 玩家受击反馈与死亡逻辑（敌人攻击玩家已完成）
 - [ ] 闪避 / 格挡技能
 - [ ] 游戏流程完善（GameMode 胜负判定、重生）
 
