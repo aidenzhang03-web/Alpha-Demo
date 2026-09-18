@@ -4,6 +4,7 @@
 #include "Player/PlayerAnimInstance.h"
 #include "AnimCharacterMovementLibrary.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Engine/Engine.h"
 //Chooser相关头文件
 #include "ChooserFunctionLibrary.h" 
 #include "IObjectChooser.h"
@@ -105,18 +106,38 @@ void UPlayerAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 	// 【联机】移动状态来源按「本地 / 远端」分流：
 	// - 本地（AutonomousProxy）：用输入层 bIsMoving —— 松键立即 false，无延迟。
-	// - 远端（SimulatedProxy）：输入层状态在本端永远是 false，改用实际速度派生。
+	// - 远端（SimulatedProxy）：用服务器权威 SpeedAuth。
 	const bool bLocallyControlled = Player->IsLocallyControlled();
-	bIsMoving = bLocallyControlled
-		? Player->GetIsMoving()
-		: (MovementSpeed > StopMoveExitSpeed);
+	if (bLocallyControlled)
+	{
+		// 本地：输入层状态，松键立即 false，无延迟
+		bIsMoving = Player->GetIsMoving();
+	}
+	else
+	{
+		// 远端：速度的「幅值」与「方向」分别取源 ——
+		// 幅值用服务器权威 SpeedAuth（两端一致，供状态判定 / Stride Warping）；
+		// 方向必须真实：Orientation Warping 的公式是
+		//   Orientation = RotationBetween(RootMotionDirection, LocomotionDirection)
+		// 若用 ActorForwardVector 伪造方向，减速/转向时与真实移动方向有夹角，
+		// 腿部会被按错误角度扭曲（表现为碎步）；且速度归零时该向量退化为零向量。）
+		const FVector ReplicatedVelocity = Player->GetVelocity();
+		const FVector MoveDir = ReplicatedVelocity.SizeSquared2D() > KINDA_SMALL_NUMBER
+			? ReplicatedVelocity.GetSafeNormal2D()
+			: Player->GetActorForwardVector();     // 速度极小时方向无意义，回退到朝向
+
+		MovementSpeed = Player->GetSpeedAuth();
+		FullVelocity = MoveDir * MovementSpeed;   // 方向真实 + 幅值权威，且 Size2D() == MovementSpeed
+
+		bIsMoving = Player->GetIsMovingAuth();
+	}
 
 	bIsTurning = Player->GetIsTurning();
 	TurnDirection = Player->GetTurnDirection();
 
-	UpdateMoveState();  //必须在 EvaluateAnimChooser 之前，让本帧 Chooser 能读到状态
-
 	UpdateMoveTransition();   // 必须在 EvaluateAnimChooser 之前，让本帧 Chooser 能读到过渡标志
+
+	UpdateMoveState();  //必须在 EvaluateAnimChooser 之前，让本帧 Chooser 能读到状态
 
 	bIsInAir = PlayerMovementComponent->IsFalling();
 
@@ -136,6 +157,8 @@ void UPlayerAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 	ModifyMotionPhysics();
 	UpdatePivotDistance();
+
+
 }
 
 void UPlayerAnimInstance::ModifyMotionPhysics() //修改玩家角色物理参数
@@ -169,6 +192,36 @@ void UPlayerAnimInstance::UpdatePivotDistance()  //获取角色制动距离
 
 void UPlayerAnimInstance::UpdateMoveState()
 {
+	// ---- 远端：完全依赖服务器复制的权威状态 ----
+	// bIsMovingAuth 由服务器按真实速度（> 10 cm/s）刷新
+	if (Player && !Player->IsLocallyControlled())
+	{
+		if (MoveTransition == EMoveTransition::StopMoving)
+		{
+			// 停止过渡中：MoveState 保持上一帧档位（与本地一致），
+			// 供 CHT_Player_Anim_Run 里 MoveTransition==StopMoving 那行选到刹车过渡数据库
+		}
+		else if (bIsMoving)
+		{
+			switch (Player->GetMoveSpeedState())
+			{
+			case EMoveSpeedState::Walk:   MoveState = EMoveState::Walk;   break;
+			case EMoveSpeedState::Sprint: MoveState = EMoveState::Sprint; break;
+			default:                       MoveState = EMoveState::Run;    break;
+			}
+		}
+		else
+		{
+			MoveState = EMoveState::Idle;
+		}
+
+		bIsSprinting = (MoveState == EMoveState::Sprint);
+		bIsWalking = (MoveState == EMoveState::Walk);
+		return;
+	}
+
+
+	// ---- 本地：原逻辑不变（保留「减速滑行保持档位」的设计）----
 	// 站立判定：不仅要求无移动输入，还要求实际速度已降到停稳阈值以下。
 	// 松开按键后角色仍会惯性滑行减速，若只看 bIsMoving 会过早切入 Idle，导致动画跳变。
 	if (!bIsMoving && MovementSpeed <= StopMoveExitSpeed)
@@ -218,6 +271,12 @@ void UPlayerAnimInstance::EvaluateAnimChooser()
 
 void UPlayerAnimInstance::UpdateMoveTransition()
 {
+	// 远端与本地共用同一套过渡逻辑：速度已在 NativeUpdateAnimation 里
+	// 按端分流（本地取 GetVelocity，远端取复制的 SpeedAuth），
+	// 因此这里无需区分端，直接按速度阈值解除过渡即可。
+
+	if (!Player) return;
+
 	// 检测移动状态沿：上一帧到本帧的变化
 	const bool bJustStarted = bIsMoving && !bWasMoving;  // 站立 → 移动（起步）
 	const bool bJustStopped = !bIsMoving && bWasMoving;  // 移动 → 站立（停止）
@@ -253,5 +312,3 @@ void UPlayerAnimInstance::UpdateMoveTransition()
 	// 记录本帧移动状态，供下一帧比较
 	bWasMoving = bIsMoving;
 }
-
-

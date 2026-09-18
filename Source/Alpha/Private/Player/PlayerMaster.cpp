@@ -171,12 +171,23 @@ void APlayerMaster::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	// 档位是离散枚举、变化频率极低 → 默认复制条件即可，带宽可忽略。
 	// 注意不要用 COND_OwnerOnly：远端角色需要它来选动画。
 	DOREPLIFETIME(APlayerMaster, MoveSpeedState);
+
+	DOREPLIFETIME(APlayerMaster, bIsMovingAuth);
+	DOREPLIFETIME(APlayerMaster, SpeedAuth);
 }
 
 // Called every frame需要时启用
 void APlayerMaster::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	// 服务器：按真实速度刷新权威移动状态。服务器上角色跑完整的 PerformMovement
+	if (HasAuthority())
+	{
+		bIsMovingAuth = bIsMoving;
+		SpeedAuth = GetVelocity().Size2D();
+	}
+
 	UpdateTurnState(DeltaTime);   // 每帧评估转向状态机
 
 	UpdateAttackTurn(DeltaTime); // 攻击朝向平滑转向

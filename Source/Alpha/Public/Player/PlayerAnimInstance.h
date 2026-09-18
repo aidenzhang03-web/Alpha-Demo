@@ -97,7 +97,7 @@ public:
 
 	// 停止过渡退出阈值：速度降到该值以下即认为已停稳
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation|Transition", meta = (ClampMin = "0"))
-	float StopMoveExitSpeed = 50.f;
+	float StopMoveExitSpeed = 20.f;
 
 protected:
 	void ModifyMotionPhysics(); //修改移动时角色物理参数
@@ -125,5 +125,4 @@ private:
 
 	// 上一帧是否在移动（用于检测过渡沿）
 	bool bWasMoving = false;
-	
 };

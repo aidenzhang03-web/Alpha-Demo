@@ -65,8 +65,15 @@ public:
 	/** 属性复制注册：把移动档位同步给客户端。 */
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+
 	UFUNCTION(BlueprintCallable, Category = "Animation")
 	bool GetIsMoving() const { return bIsMoving; }
+
+	UFUNCTION(BlueprintCallable, Category = "Animation")
+	bool GetIsMovingAuth() const { return bIsMovingAuth; }
+
+	UFUNCTION(BlueprintCallable, Category = "Animation")
+	float GetSpeedAuth() const { return SpeedAuth; }
 
 	UFUNCTION(BlueprintCallable, Category = "Animation")
 	EMoveSpeedState GetMoveSpeedState() const { return MoveSpeedState; }
@@ -135,6 +142,18 @@ protected:
 
 	// 移动状态变量
 	bool bIsMoving;  //是否正在移动
+
+	// 联机：权威移动状态。服务器每帧按真实速度刷新，复制给所有客户端。
+	// 远端角色（SimulatedProxy）的动画必须读它 —— 远端既没有本地输入状态，
+	// 速度字段在平滑结束后也不可信，只能靠服务器给结论。
+	UPROPERTY(Replicated)
+	bool bIsMovingAuth = false;
+
+	// 联机：权威速度（cm/s）。复制给客户端，供远端动画层使用。
+	// 远端不用位置差分推断：位置差分在网络平滑结束时断崖归零，
+	// 会使停止过渡窗口被截短（走档实测仅 48ms，本地 82ms），过渡动画来不及播。
+	UPROPERTY(Replicated)
+	float SpeedAuth = 0.f;
 
 	bool bComboInterruptAllowed = false;   //是否能够中断连招
 
