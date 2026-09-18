@@ -2,6 +2,9 @@
 
 > 基于 **Unreal Engine 5.8 + C++** 开发的第三人称动作游戏 Demo。
 > 移动动画由 **Motion Matching（Pose Search）** 驱动，战斗与属性系统基于 **GAS（Gameplay Ability System）** 实现。
+>
+> **本仓库仅用于展示 C++ 实现**：只包含 `Source/` 源码与 `Config/` 工程配置，
+> 美术 / 蓝图 / 动画等 `Content/` 资产不入库（详见「快速开始」）。
 
 ---
 
@@ -78,10 +81,7 @@
 Alpha/
 ├── Config/                  # 引擎与输入配置
 ├── Content/
-│   ├── Alpha/               # 本项目资产（角色 / 动画 / 武器 / 蓝图 / UI）
-│   ├── UEFN_Mannequin/      # 第三方素材包（未入库）
-│   ├── Spear/               # 第三方素材包（未入库）
-│   └── AdventureAnimset/    # 第三方素材包（未入库）
+│   └── Alpha/               # 本项目资产（角色 / 动画 / 武器 / 蓝图 / UI）
 ├── Plugins/
 ├── Source/
 │   ├── Alpha.Target.cs
@@ -103,12 +103,12 @@ Alpha/
 
 ---
 
-## 环境要求
+## 环境要求（阅读 / 编译源码所需）
 
-- **Unreal Engine 5.8**
+- **Unreal Engine 5.8**（用于编译源码与打开编辑器）
 - **Visual Studio 2022**（需勾选「使用 C++ 的游戏开发」工作负载）
 - Windows 10 / 11
-- Git + Git LFS
+- Git + Git LFS（仅用于克隆源码）
 
 > 依赖插件 `PoseSearch`、`Chooser`、`GameplayAbilities`、`AnimationLocomotionLibrary` 已在 `Alpha.uproject` 中声明。
 
@@ -116,21 +116,17 @@ Alpha/
 
 ## 快速开始
 
+> ⚠️ 本仓库为**代码展示**用途，不包含 `Content/` 下的美术、蓝图、动画资产。
+> 以下步骤可以完成编译，但打开编辑器后**没有可玩内容**（无地图、无角色资产），此为预期现象。
+
 1. 安装 **Unreal Engine 5.8**。
 2. 克隆仓库：
    ```bash
    git clone https://github.com/aidenzhang03-web/Alpha-Demo.git
    ```
-3. **准备游戏资产**（重要）：
-   由于体积原因（约 4.1 GB），以下第三方素材包**未纳入版本库**，需自行准备并放入 `Content/` 目录：
-   - `UEFN_Mannequin` —— UE 官方 Mannequin 模型与动画
-   - `Spear` —— 长枪动作素材包
-   - `AdventureAnimset` —— 冒险动作动画素材包
-
-   > 缺少这些资产时项目**可以编译**，但角色动画、武器等内容会缺失。
-4. 右键 `Alpha.uproject` → **Generate Visual Studio project files**。
-5. 在 Visual Studio 中编译 `AlphaEditor` 目标（Development Editor / Win64）。
-6. 双击 `Alpha.uproject` 打开编辑器。
+3. 右键 `Alpha.uproject` → **Generate Visual Studio project files**。
+4. 在 Visual Studio 中编译 `AlphaEditor` 目标（Development Editor / Win64）。
+5. 双击 `Alpha.uproject` 打开编辑器（此时为空场景，属预期现象）。
 
 ---
 
@@ -171,4 +167,4 @@ Alpha/
 
 ## 说明
 
-本项目用于学习与技术展示。`Content/` 下的第三方素材版权归原作者所有，不包含在本仓库中。
+本项目用于学习与技术展示。仓库仅包含**源代码与工程配置**，不含任何美术 / 蓝图 / 动画资产（`.gitignore` 已整体排除 `Content/`）；代码中引用的第三方素材版权归原作者所有。
