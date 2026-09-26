@@ -17,7 +17,7 @@
 | 动画 | Motion Matching（Pose Search）+ Chooser |
 | 能力系统 | Gameplay Ability System（GAS） |
 | AI | Behavior Tree · Blackboard · Navigation System |
-| 网络 | Actor / 属性复制 + 服务器权威判定（GAS） |
+| 网络 | Actor / 属性 / GameState 复制 + 服务器权威判定（GAS） |
 | 版本管理 | Git + Git LFS |
 
 ---
@@ -61,6 +61,13 @@
 - 受击反馈：打断当前攻击、受击期间锁移动防滑步、致死直接布娃娃（`GA_HitReact`）
 - 死亡布娃娃 + 尸体自动销毁（`Multi_Die` 多播广播表现）
 
+### 玩家死亡与团灭结算
+- 权威死亡链路：生命归零 → `UAlphaAttributeSet::OnOutOfHealth` → `APlayerMaster::Die`（仅服务器 + 幂等）→ `Multi_Die()` 多播各端表现 → `AAlphaGameMode::NotifyPlayerDied` → 团灭判定
+- 死亡表现各端本地执行：停位移 / 关胶囊碰撞 / 锁移动与视角输入 / 收武器命中盒 / 播放死亡蒙太奇（刻意不用 `DisableMovement()`，避免空中死亡永久悬停）
+- 死亡状态统一拦截：`State.Dead` 标签 + 覆写 `UAlphaGameplayAbility::CanActivateAbility`，所有派生能力自动拒绝激活
+- 团灭与结算：`AAlphaGameState::AreAllPlayersDead` 遍历 `PlayerArray` 判定，`bGameOver` 复制给所有客户端 → HUD 弹结算界面（`OnGameOverUI`）
+- 死亡事件去重：`bOutOfHealth` 标记保证多段伤害 / 周期扣血只广播一次，生命回升时复位（为治疗 / 复活预留）
+
 ### 武器
 - 组件化多武器切换（配置驱动，新增武器无需改动组件代码）
 - 收拔刀动画 + 骨骼过滤混合（站立全身播放 / 移动仅上半身）
@@ -70,7 +77,9 @@
 - 属性集通过 `GetLifetimeReplicatedProps` + `OnRep_*` 同步，血条跨端一致
 - **服务器权威**：命中判定仅在服务器开关 Hitbox；属性应用设有 `HasAuthority` 根防线
 - 能力网络策略：连招 `LocalPredicted`、敌人攻击 `ServerOnly`
-- 敌人死亡拆分为权威判定 + `Multi_Die()`（NetMulticast Reliable）表现广播
+- 死亡拆分为「权威判定 + `Multi_Die()`（NetMulticast Reliable）表现广播」，敌人与玩家同构
+- `AAlphaGameState::bGameOver` 以 `ReplicatedUsing` + `OnRep_` 复制给所有客户端（服务器置位时主动广播，补齐 Listen Server 本端）
+- 玩家死亡状态位 `APlayerMaster::bDead` 参与复制，供远端动画层与 UI 查询
 - 远端角色动画按 `IsLocallyControlled()` 分流，修正 SimulatedProxy 误播 Idle
 
 ---
@@ -96,7 +105,8 @@ Alpha/
 │       │   ├── Player/      # 玩家角色 / 输入组件 / 动画实例
 │       │   ├── UI/          # HUD 与敌人血条
 │       │   ├── Weapon/      # 武器基类与武器组件
-│       │   └── AlphaGameMode.h
+│       │   ├── AlphaGameMode.h
+│       │   └── AlphaGameState.h
 │       └── Private/         # 实现文件（与 Public 结构镜像）
 └── Alpha.uproject
 ```
@@ -159,11 +169,12 @@ Alpha/
 - [x] 多武器切换与收拔刀
 - [x] 数据驱动脚步音效
 - [x] 网络复制与服务器权威（Actor / 属性 / 能力）
+- [x] 玩家死亡与团灭结算（权威死亡链路 + 状态复制 + 结算 UI）
 
 **计划中**
-- [ ] 玩家受击反馈与死亡逻辑（敌人攻击玩家已完成）
+- [ ] 玩家受击反馈（受击动画 / 硬直）
 - [ ] 闪避 / 格挡技能
-- [ ] 游戏流程完善（GameMode 胜负判定、重生）
+- [ ] 玩家重生与观战流程
 
 ---
 
