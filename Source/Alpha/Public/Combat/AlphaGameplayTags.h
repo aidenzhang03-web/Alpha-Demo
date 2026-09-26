@@ -37,4 +37,7 @@ namespace AlphaGameplayTags
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_HitReact);     // 受击事件（触发 UGA_HitReact）
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_HitReact);   // 受击能力标签（供 CancelAbilitiesWithTag 匹配）
     UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_HitReact);     // 受击进行中（防抖 + 移动锁）
+
+    // 死亡状态
+    UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Dead);         // 死亡中（阻断一切能力激活 + 免伤）
 }

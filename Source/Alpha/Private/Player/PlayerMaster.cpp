@@ -4,6 +4,10 @@
 #include "Player/PlayerMaster.h"
 #include "Math/UnrealMathUtility.h"
 #include "Net/UnrealNetwork.h"
+#include "GameFramework/Controller.h" 
+#include "Components/CapsuleComponent.h"
+#include "Animation/AnimInstance.h" 
+#include "AlphaGameMode.h"
 
 // 角色移动组件
 #include "GameFramework/CharacterMovementComponent.h"
@@ -130,7 +134,8 @@ void APlayerMaster::BeginPlay()
 	if(WeaponComponent)
 		WeaponComponent->SpawnAndAttachWeapon();
 
-	
+	if(AttributeSet)
+		AttributeSet->OnOutOfHealth.AddDynamic(this, &APlayerMaster::HandleOutOfHealth);
 }
 
 
@@ -174,6 +179,9 @@ void APlayerMaster::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 
 	DOREPLIFETIME(APlayerMaster, bIsMovingAuth);
 	DOREPLIFETIME(APlayerMaster, SpeedAuth);
+
+	// 死亡状态位：远端要读它来停动画 / 隐藏血条，不能用 COND_OwnerOnly
+	DOREPLIFETIME(APlayerMaster, bDead);
 }
 
 // Called every frame需要时启用
@@ -368,6 +376,101 @@ void APlayerMaster::DealDamageToTarget(AActor* Target, float Amount)
 {
 	if (AttributeComponent)
 		AttributeComponent->ApplyDamageToTarget(Target, Amount);
+}
+
+// 属性集生命归零回调
+void APlayerMaster::HandleOutOfHealth()
+{
+	// 委托本身只在服务器广播（PostGameplayEffectExecute 仅权威端执行），
+	// 这里再判一次属于防御性写法：将来若改用客户端预测的 GE，不至于静默出错。
+	if (!HasAuthority()) return;
+
+	Die();
+}
+
+// 死亡：服务器权威入口，只判定 + 广播
+void APlayerMaster::Die()
+{
+	if (!HasAuthority()) return;
+	if (bDead) return;   // 幂等：多段伤害可能在同帧内重复触发
+
+	bDead = true;
+
+	// 死亡瞬间清空所有进行中的能力。否则正在播的连招 / 攻击 GA 会继续跑完，
+	// 把稍后播放的死亡蒙太奇覆盖掉。
+	// 紧接着打上 State.Dead：之后任何激活请求都会被 CanActivateAbility 拦掉。
+	if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->CancelAllAbilities();
+		AbilitySystemComponent->SetLooseGameplayTagCount(AlphaGameplayTags::State_Dead, 1);
+	}
+
+	Multi_Die();
+
+	// 通知规则层做团灭判定。放在 Multi_Die 之后：先让自己的表现启动，再上报规则层。
+	// GetAuthGameMode 只在服务器有值，客户端返回 null —— 与 Die 的服务器权威语义天然对齐。
+	if (AAlphaGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AAlphaGameMode>() : nullptr)
+		GM->NotifyPlayerDied(this);
+
+	// 刻意不调用 SetLifeSpan：与敌人不同，玩家死亡后角色必须保留，
+	// 后续结算 / 观战 / 重生都要用到它。
+}
+
+// 死亡表现：各端各自执行
+void APlayerMaster::Multi_Die_Implementation()
+{
+	// 客户端也置位：远端与本地同时进入死亡状态
+	bDead = true;
+
+	// 每个端各自打标：LooseGameplayTag 不参与复制，必须由多播在本地各自授予。
+	// 本地玩家的攻击输入会触发客户端预测激活，本地没有这个标签就会先播攻击动画、
+	// 再被服务器拒绝，产生动画回滚抖动。
+	if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->SetLooseGameplayTagCount(AlphaGameplayTags::State_Dead, 1);
+	}
+
+	// 1. 停住当前位移。
+	//    刻意不用 DisableMovement()——那会让死亡发生在空中时角色永久悬停。
+	//    保留重力与移动组件，靠「输入锁 + 能力取消」阻止继续移动。
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->StopMovementImmediately();
+	}
+
+	// 2. 关闭胶囊体碰撞：尸体不再挡路，也不会被武器命中盒扫到
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
+	// 3. 锁输入。UPlayerControlComponent 没有禁用接口，
+	//    直接走 Controller 原生屏蔽（Enhanced Input 同样受其约束）。
+	if (AController* Ctrl = GetController())
+	{
+		Ctrl->SetIgnoreMoveInput(true);
+		Ctrl->SetIgnoreLookInput(true);
+	}
+
+	// 4. 收掉武器命中盒。死亡那一帧可能还停在攻击的命中窗口内，
+	//    不关的话尸体还能继续造成伤害。
+	if (WeaponComponent)
+	{
+		WeaponComponent->DisableWeaponHitbox();
+	}
+
+	// 5. 播放死亡蒙太奇
+	if (DeathMontage)
+	{
+		if (const USkeletalMeshComponent* MeshComp = GetMesh())
+		{
+			if (UAnimInstance* AnimInst = MeshComp->GetAnimInstance())
+			{
+				AnimInst->StopAllMontages(0.1f);
+				AnimInst->Montage_Play(DeathMontage);
+			}
+		}
+	}
 }
 
 //动画通知事件触发

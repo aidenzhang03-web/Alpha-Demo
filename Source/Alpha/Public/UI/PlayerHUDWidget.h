@@ -4,6 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "PlayerHUDWidget.generated.h"
 
+class AAlphaGameState;
 class UProgressBar;
 class APlayerMaster;
 class UAbilitySystemComponent;
@@ -25,6 +26,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "HUD")
 	void InitializeHUD(APlayerMaster* InPlayer);
 
+    // 失败结算界面
+    UFUNCTION(BlueprintImplementableEvent, Category = "HUD")
+    void OnGameOverUI();
+
+
 protected:
 
     // 三个进度条（Widget Blueprint 中同名控件自动绑定）
@@ -45,8 +51,16 @@ protected:
     // 初次刷新所有条
     void RefreshAllBars();
 
+    // GameState 失败状态变化回调。服务器置位与客户端收到复制时各触发一次。 
+    UFUNCTION()
+    void HandleGameOverChanged();
+
 private:
     TWeakObjectPtr<APlayerMaster> OwningPlayer;      // 弱引用，避免悬空
+
     TWeakObjectPtr<UAbilitySystemComponent> CachedASC;
+
     bool bInitialized = false;                       // 防重复绑定
+
+    TWeakObjectPtr<AAlphaGameState> CachedGameState;   // 弱引用，避免悬空
 };

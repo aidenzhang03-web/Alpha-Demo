@@ -28,10 +28,21 @@ void UAlphaAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallb
     {
         SetHealth(FMath::Clamp(GetHealth(), 0.f, GetMaxHealth()));
 
-        // 生命归零 → 死亡处理（这里留占位，建议发 GameplayTag 事件，而非直接 Destroy）
+        // 生命归零 → 死亡处理
         if (GetHealth() <= 0.f)
         {
-            // TODO: 广播死亡事件
+            // 只在「首次跨越临界点」时广播：连招多段命中、中毒每周期跳伤
+            // 都会反复走到这里，不判 bOutOfHealth 会导致死亡事件被触发多次。
+            if (!bOutOfHealth)
+            {
+                bOutOfHealth = true;
+                OnOutOfHealth.Broadcast();
+            }
+        }
+        else
+        {
+            // 生命回升（治疗 / 后续复活）→ 复位标记，使下次归零能再次广播
+            bOutOfHealth = false;
         }
     }
     else if (ModifiedAttribute == GetManaAttribute())

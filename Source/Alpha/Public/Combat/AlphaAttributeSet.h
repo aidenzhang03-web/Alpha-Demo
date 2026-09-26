@@ -16,6 +16,12 @@
  * 客户端靠 OnRep_* 更新本地缓存并广播变化（血条监听的就是这个事件）。
  */
 
+
+ // 生命归零委托：标准 GAS 用法下 GE 由服务器应用，
+ // 所以 PostGameplayEffectExecute 里的广播天然只发生在服务器。
+ // 用动态多播是为了蓝图侧也能挂死亡表现（播动画 / 弹 UI）。
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnOutOfHealthSignature);
+
 UCLASS()
 class ALPHA_API UAlphaAttributeSet : public UAttributeSet
 {
@@ -30,6 +36,9 @@ public:
     // GE 生效后的统一回调：在此处对属性做钳制（0 ~ Max），并处理死亡等派生逻辑,仅在服务器执行。
     virtual void PostGameplayEffectExecute(const struct FGameplayEffectModCallbackData& Data) override;
 
+	/** 生命值归零时广播（仅服务器）。监听方在此启动死亡流程。 */
+	UPROPERTY(BlueprintAssignable, Category = "Attributes|Events")
+	FOnOutOfHealthSignature OnOutOfHealth;
 
 	// ========== 生命值 ==========
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Health, Category = "Attributes|Vital")
@@ -89,4 +98,10 @@ public:
 	/** MaxStamina 复制回调。@param OldMaxStamina 复制前的旧值 */
 	UFUNCTION()
 	void OnRep_MaxStamina(const FGameplayAttributeData& OldMaxStamina) const;
+
+
+private:
+	// 是否已越过生命归零临界点。多段伤害 / 周期扣血会反复进入
+	// PostGameplayEffectExecute，靠这个标记保证死亡事件全局只广播一次。
+	bool bOutOfHealth = false;
 };

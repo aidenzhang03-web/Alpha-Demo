@@ -30,4 +30,6 @@ namespace AlphaGameplayTags
     UE_DEFINE_GAMEPLAY_TAG(Event_HitReact, "Event.HitReact");
     UE_DEFINE_GAMEPLAY_TAG(Ability_HitReact, "Ability.HitReact");
     UE_DEFINE_GAMEPLAY_TAG(State_HitReact, "State.HitReact");
+
+    UE_DEFINE_GAMEPLAY_TAG(State_Dead, "State.Dead");
 }

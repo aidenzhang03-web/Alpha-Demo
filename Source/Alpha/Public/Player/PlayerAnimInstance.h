@@ -79,6 +79,9 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Animation")
 	bool bIsAttacking;   // 是否正在攻击（连招进行中，由 GAS 的 State.Combo Tag 驱动）
 
+	UPROPERTY(BlueprintReadOnly, Category = "Animation")
+	bool bIsDead;     // 是否已死亡（死亡后 Locomotion 层冻结，交死亡蒙太奇接管）
+
 	// Chooser 表资产，可在蓝图中指定
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
 	TObjectPtr<UChooserTable> AnimChooserTable;

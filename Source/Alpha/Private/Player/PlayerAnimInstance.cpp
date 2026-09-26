@@ -53,6 +53,9 @@ UPlayerAnimInstance::UPlayerAnimInstance()
 
 	// 初始化攻击状态
 	bIsAttacking = false;
+
+	// 初始化死亡状态
+	bIsDead = false;
 }
 
 void UPlayerAnimInstance::NativeInitializeAnimation()
@@ -94,6 +97,13 @@ void UPlayerAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 	// 任一引用无效则安全退出，彻底避免跨帧解引用
 	if (!Player || !PlayerMovementComponent)
+	{
+		return;
+	}
+
+	// 死亡短路，放在所有移动状态更新之前，让所有移动相关字段冻结在死前最后一帧
+	bIsDead = Player->IsDead();
+	if (bIsDead)
 	{
 		return;
 	}

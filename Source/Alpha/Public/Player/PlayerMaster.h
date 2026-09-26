@@ -114,6 +114,22 @@ public:
 	float GetMaxStamina() const { return AttributeSet ? AttributeSet->GetMaxStamina() : 0.f; }
 
 
+
+	// ========== 死亡 ==========
+
+	/** 是否已死亡。供动画层与外部系统查询。 */
+	UFUNCTION(BlueprintCallable, Category = "Death")
+	bool IsDead() const { return bDead; }
+
+	/** 死亡：服务器权威入口。只做判定与广播，不做表现。 */
+	void Die();
+
+	/** 死亡表现：每个端各自执行（动画 / 碰撞 / 输入都是本地状态，不参与复制）。 */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_Die();
+
+
+
 	// 尝试因移动/跳跃等操作中断连招。仅在后摇「可中断」通知触发后生效，且只消费一次。
 	UFUNCTION(BlueprintCallable, Category = "Combo")
 	bool TryInterruptCombo();
@@ -159,7 +175,24 @@ protected:
 
 
 
+	// ========== 死亡状态 ==========
+
+	/** 属性集「生命归零」回调。动态委托要求必须是 UFUNCTION。 */
+	UFUNCTION()
+	void HandleOutOfHealth();
+
+	/** 死亡标志位。服务器置位后复制到客户端，客户端据此驱动动画与输入锁。 */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Death")
+	bool bDead = false;
+
+	/** 死亡蒙太奇（在 BP_PlayerMaster 里指定）。 */
+	UPROPERTY(EditDefaultsOnly, Category = "Death")
+	TObjectPtr<UAnimMontage> DeathMontage;
+
+
+
 	// ========== 攻击朝向（每段连击开始时按输入方向平滑转向）==========
+
 	FVector LastInputWorldDir = FVector::ZeroVector;  // 最后有效的移动输入世界方向（摄像机相对）
 	bool bAttackTurning = false;                       // 攻击朝向平滑转向进行中
 	float AttackTargetYaw = 0.f;                       // 攻击目标朝向 Yaw
@@ -170,6 +203,7 @@ protected:
 
 
 	// ========== 组件声明 ==========
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	TObjectPtr<UCameraComponent> CameraComponent; // 摄像机组件
 
@@ -194,6 +228,7 @@ protected:
 
 
 	// ========== 移动速度配置 ==========
+
 	UPROPERTY(EditDefaultsOnly, Category = "Movement|Speed", meta = (ClampMin = "0"))
 	float RunSpeed = 435.f;      // 跑步（默认）速度
 
@@ -206,6 +241,7 @@ protected:
 
 
 	// ========== 移动参数 ==========
+	
 	// 默认加速度
 	UPROPERTY(EditDefaultsOnly, Category = "Movement", meta = (ClampMin = "0"))
 	float DefaultMaxAcceleration = 800.f;
@@ -243,6 +279,7 @@ protected:
 
 
 	// ========== 摄像机/弹簧臂 ==========
+
 	UPROPERTY(EditDefaultsOnly, Category = "Camera")
 	float SpringArmLength = 350.f;          // 弹簧臂长度
 
@@ -253,7 +290,9 @@ protected:
 	FVector CameraOffset = FVector(0.f, 70.f, 20.f);     // 摄像机相对位置
 
 
+
 	// ========== 转向相关 ==========
+
 	UPROPERTY(BlueprintReadOnly, Category = "Movement|Turn")
 	ETurnDirection TurnDirection = ETurnDirection::None; // 权威源
 
@@ -278,6 +317,7 @@ protected:
 
 
 	// ======== 玩家HUD ========
+
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UPlayerHUDWidget> HUDWidgetClass;   // 蓝图里指到 WBP_PlayerHUD
 
@@ -285,7 +325,9 @@ protected:
 	TObjectPtr<UPlayerHUDWidget> HUDWidget;          // 保存引用，便于后续显示/隐藏
 
 
+
 	// ========== 连招能力 ==========
+	
 	// 连招能力类（在蓝图 BP_PlayerMaster 里指定，或这里用 TSubclassOf 默认值）
 	UPROPERTY(EditDefaultsOnly, Category = "Combo")
 	TSubclassOf<UGA_Attack> AttackAbilityClass;

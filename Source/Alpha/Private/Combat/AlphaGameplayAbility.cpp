@@ -3,8 +3,39 @@
 
 #include "Combat/AlphaGameplayAbility.h"
 #include "Player/PlayerMaster.h"
+#include "Combat/AlphaGameplayTags.h"
 #include "AbilitySystemComponent.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
+
+// 统一激活检查：基类规则 + 死亡状态拦截
+bool UAlphaGameplayAbility::CanActivateAbility(
+    const FGameplayAbilitySpecHandle Handle,
+    const FGameplayAbilityActorInfo* ActorInfo,
+    const FGameplayTagContainer* SourceTags,
+    const FGameplayTagContainer* TargetTags,
+    FGameplayTagContainer* OptionalRelevantTags) const
+{
+    // 先走父类：冷却、消耗、ActivationBlockedTags、NetExecutionPolicy 等原生规则
+    if (!Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags))
+    {
+        return false;
+    }
+
+    // 死亡状态统一拦截。
+    // 写在这里而非各 GA 内部：所有派生能力（GA_Attack / GA_EnemyAttack / GA_HitReact）
+    // 自动继承，后续新增能力也不会漏。
+    // 查的是 ASC 实际持有的 OwnedTags —— LooseGameplayTag 也在其中。
+    if (const UAbilitySystemComponent* ASC =
+        ActorInfo ? ActorInfo->AbilitySystemComponent.Get() : nullptr)
+    {
+        if (ASC->HasMatchingGameplayTag(AlphaGameplayTags::State_Dead))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
 
 // 便捷获取角色拥有者（能力的 Avatar Actor，即挂 ASC 的 APlayerMaster）
 APlayerMaster* UAlphaGameplayAbility::GetPlayerMaster() const
