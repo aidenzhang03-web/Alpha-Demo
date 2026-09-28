@@ -8,6 +8,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Animation/AnimInstance.h" 
 #include "AlphaGameMode.h"
+#include "AlphaGameState.h"
 
 // 角色移动组件
 #include "GameFramework/CharacterMovementComponent.h"
@@ -147,21 +148,37 @@ void APlayerMaster::PossessedBy(AController* NewController)
 	if (AbilitySystemComponent)
 		AbilitySystemComponent->InitAbilityActorInfo(this, this);
 
-	// 创建 HUD Widget
-	if (HUDWidgetClass)
-	{
-		if (APlayerController* PC = Cast<APlayerController>(GetController()))
-		{
-			if (!PC->IsLocalController()) return;   // CreateWidget 必须限定本地控制器，否则非本地 PC 上创建 Widget 会失败/告警。
+	TryCreateHUD();   // 服务器路径
+}
 
-			HUDWidget = CreateWidget<UPlayerHUDWidget>(PC, HUDWidgetClass);
-			if (HUDWidget)
-			{
-				HUDWidget->AddToViewport();
-				HUDWidget->InitializeHUD(this);
-			}
-		}
-	}
+// 客户端路径：Controller 复制到达时调用。
+// PossessedBy 只在服务器的 AController::Possess() 内被调用，客户端走的是这条。
+void APlayerMaster::OnRep_Controller()
+{
+	Super::OnRep_Controller();
+
+	TryCreateHUD();
+}
+
+// 创建 HUD：两端共用的幂等实现
+void APlayerMaster::TryCreateHUD()
+{
+	if (HUDWidget) return;        // 已创建过（PossessedBy 与 OnRep_Controller 可能先后都触发）
+	if (!HUDWidgetClass) return;
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC) return;
+
+	// 只有本地控制器才创建 Widget。这个判断对两端都成立：
+	//   服务器上 → 只有 P1 的 PC 是本地，远端玩家（P2）在服务器上也走 PossessedBy 但会被挡掉
+	//   客户端上 → 只有自己拥有的 Pawn 的 PC 是本地
+	if (!PC->IsLocalController()) return;
+
+	HUDWidget = CreateWidget<UPlayerHUDWidget>(PC, HUDWidgetClass);
+	if (!HUDWidget) return;
+
+	HUDWidget->AddToViewport();
+	HUDWidget->InitializeHUD(this);
 }
 
 UAbilitySystemComponent* APlayerMaster::GetAbilitySystemComponent() const
@@ -422,6 +439,9 @@ void APlayerMaster::Multi_Die_Implementation()
 	// 客户端也置位：远端与本地同时进入死亡状态
 	bDead = true;
 
+	// 通知本地 HUD 显示个人死亡面板（各端各自触发）
+	OnDeadStateChanged.Broadcast(true);
+
 	// 每个端各自打标：LooseGameplayTag 不参与复制，必须由多播在本地各自授予。
 	// 本地玩家的攻击输入会触发客户端预测激活，本地没有这个标签就会先播攻击动画、
 	// 再被服务器拒绝，产生动画回滚抖动。
@@ -471,6 +491,103 @@ void APlayerMaster::Multi_Die_Implementation()
 			}
 		}
 	}
+}
+
+void APlayerMaster::RequestRevive()
+{
+	// Server RPC：服务器上调用会直接本地执行，客户端上调用自动转发。
+	Server_RequestRevive();
+}
+
+void APlayerMaster::Server_RequestRevive_Implementation()
+{
+	if (!HasAuthority()) return;   // Server RPC 必在服务器执行，这是防御性写法
+	Revive();
+}
+
+// 复活：服务器权威入口
+void APlayerMaster::Revive()
+{
+	if (!HasAuthority()) return;
+	if (!bDead) return;   // 幂等：没死不用复活
+
+	bDead = false;
+
+	// 回血：ApplyHealthCost 内部对 Amount 取负（AlphaAttributeComponent.cpp），
+	// 所以传负数即加血。用 MaxHealth 而非硬编码数值，改属性上限时不必同步改这里。
+	// 属性集里的 bOutOfHealth 会在血量回升时自动复位（AlphaAttributeSet.cpp 的 else 分支），
+	// 所以复活后能再次触发死亡，这里不需要额外处理。
+	if (AttributeComponent)
+	{
+		AttributeComponent->ApplyHealthCost(-GetMaxHealth());
+	}
+
+	// 解除 GameState 的失败锁定。
+	// 注意：结算面板已改为由 bDead 驱动，所以这一步不影响 UI 显隐；
+	// 它的作用是保持规则层状态准确 —— 否则 bGameOver 会永久停在 true，
+	// NotifyPlayerDied 的 early return 会让后续的团灭判定失效。
+	if (UWorld* World = GetWorld())
+	{
+		if (AAlphaGameState* GS = World->GetGameState<AAlphaGameState>())
+		{
+			GS->ClearGameOver();
+		}
+	}
+
+	Multi_Revive();   // 表现广播到所有端（含服务器自己）
+}
+
+// 复活表现：各端各自执行
+void APlayerMaster::Multi_Revive_Implementation()
+{
+	bDead = false;
+
+	// 通知本地 HUD 隐藏个人死亡面板
+	OnDeadStateChanged.Broadcast(false);
+
+	// 移除死亡标签。用 SetLooseGameplayTagCount(..., 0) 而非 RemoveLooseGameplayTag：
+	// 前者直接设定计数（幂等），后者每次调用递减，重复调用会导致计数异常。
+	// 与 Die 里的 SetLooseGameplayTagCount(State_Dead, 1) 语义对称。
+	if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->SetLooseGameplayTagCount(AlphaGameplayTags::State_Dead, 0);
+	}
+
+	// 1. 恢复胶囊体碰撞。QueryOnly 是 ACharacter 胶囊的标准值：
+	//    只参与查询（射线/重叠），不参与物理模拟。
+	//    中文界面选项为 "Query Only (No Physics Collision)"。
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	}
+
+	// 2. 恢复输入。必须用 Reset* 而非 SetIgnoreMoveInput(false)：
+	//    SetIgnoreMoveInput 内部是堆叠计数（Controller.h:114 注明 "Stacked state storage"），
+	//    多次屏蔽后需要同样次数的 false 才能解开；Reset 一次清空所有层。
+	if (AController* Ctrl = GetController())
+	{
+		Ctrl->ResetIgnoreMoveInput();
+		Ctrl->ResetIgnoreLookInput();
+	}
+
+	// 3. 停掉死亡蒙太奇。
+	//    因为死亡蒙太奇关掉了 bEnableAutoBlendOut，它永远不会自己结束，
+	//    必须显式 Montage_Stop，否则 Slot 权重一直是 1，复活后角色仍保持倒地姿态。
+	//    第二个参数限定只停死亡蒙太奇，不影响其他在播的蒙太奇。
+	if (DeathMontage)
+	{
+		if (const USkeletalMeshComponent* MeshComp = GetMesh())
+		{
+			if (UAnimInstance* AnimInst = MeshComp->GetAnimInstance())
+			{
+				AnimInst->Montage_Stop(0.2f, DeathMontage);
+			}
+		}
+	}
+
+	// 4. 动画层自动解冻，无需额外通知：
+	//    UPlayerAnimInstance::NativeUpdateAnimation 每帧读 Player->IsDead()，
+	//    bDead 已置 false，下一帧就会恢复正常更新。
 }
 
 //动画通知事件触发

@@ -4,7 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "PlayerHUDWidget.generated.h"
 
-class AAlphaGameState;
+
 class UProgressBar;
 class APlayerMaster;
 class UAbilitySystemComponent;
@@ -30,6 +30,15 @@ public:
     UFUNCTION(BlueprintImplementableEvent, Category = "HUD")
     void OnGameOverUI();
 
+    // 复活：隐藏结算界面。与 OnGameOverUI 对称，单独一个事件是为了
+    // 不动你已经连好的 OnGameOverUI 蓝图节点（改签名会导致已有节点失效重连）。
+    UFUNCTION(BlueprintImplementableEvent, Category = "HUD")
+    void OnReviveUI();
+
+    /** 复活按钮入口：转发给玩家角色。WBP 里把按钮 OnClicked 绑到这里即可。 */
+    UFUNCTION(BlueprintCallable, Category = "HUD")
+    void RequestRevive();
+
 
 protected:
 
@@ -51,16 +60,16 @@ protected:
     // 初次刷新所有条
     void RefreshAllBars();
 
-    // GameState 失败状态变化回调。服务器置位与客户端收到复制时各触发一次。 
+    /** 个人死亡状态变化回调。面板显隐由「自己是否死亡」决定，与队友无关。 */
     UFUNCTION()
-    void HandleGameOverChanged();
+    void HandleDeadStateChanged(bool bIsDead);
 
 private:
+
     TWeakObjectPtr<APlayerMaster> OwningPlayer;      // 弱引用，避免悬空
 
     TWeakObjectPtr<UAbilitySystemComponent> CachedASC;
 
     bool bInitialized = false;                       // 防重复绑定
 
-    TWeakObjectPtr<AAlphaGameState> CachedGameState;   // 弱引用，避免悬空
 };

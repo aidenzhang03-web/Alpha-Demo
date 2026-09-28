@@ -5,7 +5,6 @@
 #include "Combat/AlphaAttributeSet.h"
 #include "AbilitySystemComponent.h"
 #include "GameplayEffectTypes.h"
-#include "AlphaGameState.h"
  
 
 void UPlayerHUDWidget::InitializeHUD(APlayerMaster* InPlayer)
@@ -32,28 +31,19 @@ void UPlayerHUDWidget::InitializeHUD(APlayerMaster* InPlayer)
 
     RefreshAllBars();
 
+    // 订阅自己的死亡状态。面板显隐改由「自己是否死亡」驱动，
+    // 而不是全局的 GameState::bGameOver —— 这样各自独立复活、互不影响。
+    // OwningPlayer 是 HUD 持有者本人，所以只会收到自己的状态变化。
+    OwningPlayer->OnDeadStateChanged.AddDynamic(this, &UPlayerHUDWidget::HandleDeadStateChanged);
 
-
-    // ===== 失败结算：订阅 GameState 的失败广播 =====
-    
-    // 放在末尾而非开头：上面的 early return 会提前退出，绑定必须在这之后才可靠。
-    if (UWorld* World = GetWorld())
-    {
-        if (AAlphaGameState* GS = World->GetGameState<AAlphaGameState>())
-        {
-            CachedGameState = GS;
-            GS->OnGameOverChanged.AddDynamic(this, &UPlayerHUDWidget::HandleGameOverChanged);
-
-            // 绑定之前就已团灭的情况必须补一次。
-            // 典型场景：中途加入的玩家、或 HUD 创建晚于失败判定。
-            // 委托只能收到「之后」的变化，漏掉这句会让这些玩家永远看不到结算界面。
-            if (GS->IsGameOver())
-            {
-                HandleGameOverChanged();
-            }
-        }
-    }
+    // 只在真的死了时才补一次：HUD 创建可能晚于死亡（例如中途加入的玩家），
+    // 而委托只能收到「之后」的变化，收不到已经发生的那次。
+    // 活着时刻意不调用 —— HandleDeadStateChanged(false) 会触发 OnReviveUI，
+    // 将来那里若加了复活特效/音效，游戏开局会误触发一次。
+    if(OwningPlayer->IsDead())
+        HandleDeadStateChanged(true);
 }
+
 
 // 生命值
 void UPlayerHUDWidget::OnHealthChanged(const FOnAttributeChangeData& Data)
@@ -101,21 +91,35 @@ void UPlayerHUDWidget::RefreshAllBars()
     }
 }
 
-// GameState 失败状态变化回调
-void UPlayerHUDWidget::HandleGameOverChanged()
+void UPlayerHUDWidget::HandleDeadStateChanged(bool bIsDead)
 {
-    // 只弹本地玩家的界面。HUD 本来只在本地控制器上创建
-    // （见 APlayerMaster::PossessedBy 里的 IsLocalController 判断），这里再判一次属防御性写法。
+    // HUD 本就只在本地控制器的 Pawn 上创建（见 APlayerMaster::TryCreateHUD），
+    // 这里再判一次属防御性写法：多播会覆盖所有端，远端 Pawn 的广播不该影响本地界面。
     if (!OwningPlayer.IsValid() || !OwningPlayer->IsLocallyControlled()) return;
 
-    // 结算界面要能被鼠标操作：切到 UI 输入模式并显示鼠标。
-    // 移动 / 视角输入已在 APlayerMaster::Multi_Die 里关掉了，这里只管鼠标可见性。
-    // 若结算面板不需要任何交互（纯提示文字），这一段可以删掉。
-    if (APlayerController* PC = Cast<APlayerController>(OwningPlayer->GetController()))
+    APlayerController* PC = Cast<APlayerController>(OwningPlayer->GetController());
+    if (!PC) return;
+
+    if (bIsDead)
     {
         PC->SetShowMouseCursor(true);
         PC->SetInputMode(FInputModeUIOnly());
+        OnGameOverUI();      // 显示个人死亡面板
     }
+    else
+    {
+        PC->SetShowMouseCursor(false);
+        PC->SetInputMode(FInputModeGameOnly());
+        OnReviveUI();        // 隐藏面板
+    }
+}
 
-    OnGameOverUI();   // 转发给蓝图显示结算面板
+void UPlayerHUDWidget::RequestRevive()
+{
+    // 转发而非让蓝图去 Cast：WBP 里直接 Self → Request Revive 就行。
+    // 按钮点击天然只发生在本地玩家，所以这里不用判 IsLocallyControlled。
+    if (OwningPlayer.IsValid())
+    {
+        OwningPlayer->RequestRevive();
+    }
 }

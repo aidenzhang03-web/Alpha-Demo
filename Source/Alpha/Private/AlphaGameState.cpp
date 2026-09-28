@@ -24,6 +24,20 @@ void AAlphaGameState::SetGameOver()
 	OnGameOverChanged.Broadcast();
 }
 
+void AAlphaGameState::ClearGameOver()
+{
+	// 只有服务器能改，理由同 SetGameOver：客户端本地改会被属性复制覆盖
+	if (!HasAuthority()) return;
+	if (!bGameOver) return;   // 幂等
+
+	bGameOver = false;
+
+	// 与 SetGameOver 对称：服务器上 OnRep 不会被调用，必须手动广播。
+	// HUD 侧据此判断是「显示结算界面」还是「隐藏结算界面」——
+	// 同一个委托承载双向变化，方向由 IsGameOver() 的当前值决定。
+	OnGameOverChanged.Broadcast();
+}
+
 void AAlphaGameState::OnRep_GameOver()
 {
 	// 客户端：属性复制到达时广播

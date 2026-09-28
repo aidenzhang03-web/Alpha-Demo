@@ -45,6 +45,8 @@ enum class ETurnDirection : uint8
 	Right   UMETA(DisplayName = "右转")
 };
 
+/** 死亡状态变化广播。参数为当前是否死亡。 */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDeadStateChangedSignature, bool, bIsDead);
 
 
 UCLASS()
@@ -65,6 +67,8 @@ public:
 	/** 属性复制注册：把移动档位同步给客户端。 */
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	/** Controller 复制到达（客户端）时创建 HUD。PossessedBy 是服务器专属，客户端不会执行。 */
+	virtual void OnRep_Controller() override;
 
 	UFUNCTION(BlueprintCallable, Category = "Animation")
 	bool GetIsMoving() const { return bIsMoving; }
@@ -128,6 +132,30 @@ public:
 	UFUNCTION(NetMulticast, Reliable)
 	void Multi_Die();
 
+	/**
+	 * 死亡状态变化广播。
+	 * 由 Multi_Die / Multi_Revive 在所有端各自触发，HUD 据此显示或隐藏个人死亡面板。
+	 * 刻意不用 RepNotify：Multi_Die 里已本地赋值 bDead，属性复制到达时新旧值相同，
+	 * OnRep 不会触发，客户端 HUD 就收不到通知。
+	 */
+	UPROPERTY(BlueprintAssignable, Category = "Death")
+	FOnDeadStateChangedSignature OnDeadStateChanged;
+
+
+
+	// ======== 复活 ========
+
+	/** 请求复活（客户端可调）。内部转发 Server RPC，调用处不必判 HasAuthority。 */
+	UFUNCTION(BlueprintCallable, Category = "Death")
+	void RequestRevive();
+
+	/** 复活：服务器权威入口。重置状态 + 回血 + 解除失败锁定，不做表现。 */
+	void Revive();
+
+	/** 复活表现：每个端各自执行（碰撞 / 输入 / 蒙太奇都是本地状态）。 */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multi_Revive();
+
 
 
 	// 尝试因移动/跳跃等操作中断连招。仅在后摇「可中断」通知触发后生效，且只消费一次。
@@ -156,6 +184,9 @@ protected:
 	UPROPERTY(Replicated)
 	EMoveSpeedState MoveSpeedState = EMoveSpeedState::Run;    // 默认为跑步状态
 
+	/** 创建 HUD 并绑定。服务器与客户端都会调用，内部幂等。 */
+	void TryCreateHUD();
+
 	// 移动状态变量
 	bool bIsMoving;  //是否正在移动
 
@@ -180,6 +211,10 @@ protected:
 	/** 属性集「生命归零」回调。动态委托要求必须是 UFUNCTION。 */
 	UFUNCTION()
 	void HandleOutOfHealth();
+
+	/** 服务器实际执行复活。 */
+	UFUNCTION(Server, Reliable)
+	void Server_RequestRevive();
 
 	/** 死亡标志位。服务器置位后复制到客户端，客户端据此驱动动画与输入锁。 */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Death")
