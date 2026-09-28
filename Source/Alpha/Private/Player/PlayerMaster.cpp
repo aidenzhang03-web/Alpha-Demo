@@ -209,7 +209,12 @@ void APlayerMaster::Tick(float DeltaTime)
 	// 服务器：按真实速度刷新权威移动状态。服务器上角色跑完整的 PerformMovement
 	if (HasAuthority())
 	{
-		bIsMovingAuth = bIsMoving;
+		const UCharacterMovementComponent* MoveComp = GetCharacterMovement();
+		// 服务器上 GetLastInputVector() 恒为零：ControlInputVector 只在本地输入回调里累加，
+		// 客户端输入是经 ServerMove 的 NewAccel 参数上行的，从不写入该成员
+		// （见 APawn::Internal_ConsumeMovementInputVector）。改用 MoveAutonomous 恢复的 Acceleration。
+		bIsMovingAuth = MoveComp && !MoveComp->GetCurrentAcceleration().IsNearlyZero();
+
 		SpeedAuth = GetVelocity().Size2D();
 	}
 
@@ -270,6 +275,37 @@ void APlayerMaster::ModifyMaxWalkSpeed(EMoveSpeedState PreviousState)
 	if (AttributeComponent)
 	{
 		AttributeComponent->SetSprinting(MoveSpeedState == EMoveSpeedState::Sprint);
+	}
+}
+
+// 服务器权威移动档位
+void APlayerMaster::Server_SetMoveSpeedState_Implementation(EMoveSpeedState NewState)
+{
+	// 幂等：重复上报同一档位时直接返回，避免不断重置 MaxAcceleration
+	// （MaxAcceleration 被反复重置会让起步加速节奏断裂）
+	if (MoveSpeedState == NewState)
+	{
+		return;
+	}
+
+	// 以服务器当前档位作为 PreviousState：Reliable RPC 保证顺序，
+	// 因此服务器端档位与客户端切换前档位一致，
+	// 无需客户端额外传参，避免乱序时两参数互相矛盾。
+	const EMoveSpeedState PreviousState = MoveSpeedState;
+	MoveSpeedState = NewState;
+
+	ModifyMaxWalkSpeed(PreviousState);
+}
+
+// 冲刺折返：把加速度提升到默认高值，供折返后快速重新加速
+void APlayerMaster::Server_ApplyPivotAcceleration_Implementation()
+{
+	// 折返判定依赖「摄像机相对输入方向」，服务器上没有输入信息，无法自行推断，
+	// 只能由客户端算出后上行。若不显式同步，服务器侧加速度会停留在档位默认值，
+	// 权威轨迹比客户端预测慢，误差累积后触发 ClientAdjustPosition，把客户端拉回慢速轨迹。
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->MaxAcceleration = DefaultMaxAcceleration;
 	}
 }
 

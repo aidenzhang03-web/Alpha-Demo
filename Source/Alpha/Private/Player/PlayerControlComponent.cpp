@@ -157,6 +157,7 @@ void UPlayerControlComponent::Moving(const FInputActionValue& Value)
 				// 冲刺折返：切回高加速度，让折返后的重新加速有爆发力
 				// 否则 SprintTransitionAcceleration 会让「低速→640」的重新加速拖到 3 秒以上
 				Movement->MaxAcceleration = Player->DefaultMaxAcceleration;
+				Player->Server_ApplyPivotAcceleration();   // 上行权威加速度，远端不执行本回调
 			}
 		}
 	}
@@ -183,6 +184,7 @@ void UPlayerControlComponent::StopMoving(const FInputActionValue& Value)
 	if (Player->MoveSpeedState == EMoveSpeedState::Sprint)
 	{
 		Player->MoveSpeedState = EMoveSpeedState::Run;
+		Player->Server_SetMoveSpeedState(EMoveSpeedState::Run);   // 上行权威档位
 	}
 
 	// 真正停止移动：重置转向状态机
@@ -240,6 +242,7 @@ void UPlayerControlComponent::Sprint(const FInputActionValue& Value)
 		// 如果不是在移动时按下了冲刺键，则切换为慢跑状态
 		Player->MoveSpeedState = EMoveSpeedState::Run;
 		Player->ModifyMaxWalkSpeed();
+		Player->Server_SetMoveSpeedState(EMoveSpeedState::Run);   // 上行权威档位
 		return;
 	}
 
@@ -250,6 +253,8 @@ void UPlayerControlComponent::Sprint(const FInputActionValue& Value)
 	Player->MoveSpeedState = (Player->MoveSpeedState == EMoveSpeedState::Sprint)
 		? EMoveSpeedState::Run
 		: EMoveSpeedState::Sprint;
+
+	Player->Server_SetMoveSpeedState(Player->MoveSpeedState);   // 上行权威档位
 
 	//更新速度，传入来源，加速度在此内部一次性定完
 	Player->ModifyMaxWalkSpeed(PreviousState);
@@ -267,6 +272,8 @@ void UPlayerControlComponent::Walk(const FInputActionValue& Value)
 	Player->MoveSpeedState = (Player->MoveSpeedState == EMoveSpeedState::Walk)
 		? EMoveSpeedState::Run
 		: EMoveSpeedState::Walk;
+
+	Player->Server_SetMoveSpeedState(Player->MoveSpeedState);   // 上行权威档位
 
 	Player->ModifyMaxWalkSpeed();
 

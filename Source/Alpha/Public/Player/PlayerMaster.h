@@ -373,6 +373,15 @@ protected:
    // 默认值 Run 仅作「无特殊来源」哨兵——只有当前是 Sprint 且来源是 Walk 时才走特殊分支。
 	void ModifyMaxWalkSpeed(EMoveSpeedState PreviousState = EMoveSpeedState::Run); 
 
+	/** 客户端上报移动档位切换。服务器为权威：设置权威档位并按新档位刷新 MaxWalkSpeed/MaxAcceleration。 */
+	UFUNCTION(Server, Reliable)
+	void Server_SetMoveSpeedState(EMoveSpeedState NewState);
+
+	/** 客户端上报「冲刺折返」触发。服务器为权威：把加速度提升到 DefaultMaxAcceleration，
+	 *  让折返后的重新加速节奏与客户端预测保持一致，避免权威轨迹落后触发位置校正。 */
+	UFUNCTION(Server, Reliable)
+	void Server_ApplyPivotAcceleration();
+
 	float GetCurrentWalkSpeed() const;//获取当前移动速度
 
 
