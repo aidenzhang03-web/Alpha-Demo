@@ -61,12 +61,14 @@
 - 受击反馈：打断当前攻击、受击期间锁移动防滑步、致死直接布娃娃（`GA_HitReact`）
 - 死亡布娃娃 + 尸体自动销毁（`Multi_Die` 多播广播表现）
 
-### 玩家死亡与团灭结算
+### 玩家死亡 · 团灭结算与复活
 - 权威死亡链路：生命归零 → `UAlphaAttributeSet::OnOutOfHealth` → `APlayerMaster::Die`（仅服务器 + 幂等）→ `Multi_Die()` 多播各端表现 → `AAlphaGameMode::NotifyPlayerDied` → 团灭判定
 - 死亡表现各端本地执行：停位移 / 关胶囊碰撞 / 锁移动与视角输入 / 收武器命中盒 / 播放死亡蒙太奇（刻意不用 `DisableMovement()`，避免空中死亡永久悬停）
 - 死亡状态统一拦截：`State.Dead` 标签 + 覆写 `UAlphaGameplayAbility::CanActivateAbility`，所有派生能力自动拒绝激活
-- 团灭与结算：`AAlphaGameState::AreAllPlayersDead` 遍历 `PlayerArray` 判定，`bGameOver` 复制给所有客户端 → HUD 弹结算界面（`OnGameOverUI`）
-- 死亡事件去重：`bOutOfHealth` 标记保证多段伤害 / 周期扣血只广播一次，生命回升时复位（为治疗 / 复活预留）
+- 团灭判定（规则层）：`AAlphaGameState::AreAllPlayersDead` 遍历 `PlayerArray`，全员死亡才置位 `bGameOver`
+- **个人死亡面板**：HUD 显隐由 `APlayerMaster::bDead`（个人状态）驱动，而非全局 `bGameOver` —— 各自独立，一个玩家复活不会关掉队友的面板
+- 复活：`RequestRevive`（Server RPC）→ `Revive` 回满血 + 清除团灭锁定 → `Multi_Revive` 多播恢复各端碰撞 / 输入 / 蒙太奇
+- 死亡事件去重：`bOutOfHealth` 标记保证多段伤害 / 周期扣血只广播一次，生命回升时复位（治疗与复活复用同一机制）
 
 ### 武器
 - 组件化多武器切换（配置驱动，新增武器无需改动组件代码）
@@ -78,8 +80,10 @@
 - **服务器权威**：命中判定仅在服务器开关 Hitbox；属性应用设有 `HasAuthority` 根防线
 - 能力网络策略：连招 `LocalPredicted`、敌人攻击 `ServerOnly`
 - 死亡拆分为「权威判定 + `Multi_Die()`（NetMulticast Reliable）表现广播」，敌人与玩家同构
-- `AAlphaGameState::bGameOver` 以 `ReplicatedUsing` + `OnRep_` 复制给所有客户端（服务器置位时主动广播，补齐 Listen Server 本端）
+- `AAlphaGameState::bGameOver` 以 `ReplicatedUsing` + `OnRep_` 复制给所有客户端（服务器置位时主动广播，补齐 Listen Server 本端），作为规则层状态
 - 玩家死亡状态位 `APlayerMaster::bDead` 参与复制，供远端动画层与 UI 查询
+- 死亡状态变化用 `OnDeadStateChanged` 多播广播（`Multi_Die` / `Multi_Revive` 内触发）而非 RepNotify：`Multi_Die` 已本地赋值 `bDead`，属性复制到达时新旧值相同，`OnRep` 不会触发，客户端 HUD 将收不到通知
+- 客户端 HUD 由 `APawn::OnRep_Controller()` 创建（`PossessedBy` 是服务器专属回调，客户端不会执行），GameState 绑定带定时重试以应对复制顺序不确定
 - 远端角色动画按 `IsLocallyControlled()` 分流，修正 SimulatedProxy 误播 Idle
 
 ---
@@ -170,11 +174,13 @@ Alpha/
 - [x] 数据驱动脚步音效
 - [x] 网络复制与服务器权威（Actor / 属性 / 能力）
 - [x] 玩家死亡与团灭结算（权威死亡链路 + 状态复制 + 结算 UI）
+- [x] 玩家复活（个人独立死亡面板 + 多播恢复，各端互不影响）
 
 **计划中**
 - [ ] 玩家受击反馈（受击动画 / 硬直）
 - [ ] 闪避 / 格挡技能
-- [ ] 玩家重生与观战流程
+- [ ] 观战流程
+- [ ] 复活次数限制
 
 ---
 
