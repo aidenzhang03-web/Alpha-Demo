@@ -1,7 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
-
-
-#include "Player/PlayerMaster.h"
+﻿#include "Player/PlayerMaster.h"
 #include "Math/UnrealMathUtility.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Controller.h" 
@@ -25,17 +22,17 @@
 #include "Blueprint/UserWidget.h"
 
 
-// Sets default values
+// 构造：创建各功能组件，配置移动参数与网络复制
 APlayerMaster::APlayerMaster()
 {
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
-	PrimaryActorTick.bCanEverTick = true;   //需要Tick时再启用
+	PrimaryActorTick.bCanEverTick = true;   // 需要Tick时再启用
 
 	// ======== 初始化组件 ========
 	// 创建玩家输入组件（Enhanced Input 集中管理）
 	ControlsComponent = CreateDefaultSubobject<UPlayerControlComponent>(TEXT("ControlsComponent"));
 
-	//创建玩家武器组件
+	// 创建玩家武器组件
 	WeaponComponent = CreateDefaultSubobject<UWeaponComponent>(TEXT("WeaponComponent"));
 
 	// 创建弹簧臂组件
@@ -57,12 +54,12 @@ APlayerMaster::APlayerMaster()
 	bIsMoving = false;
 
 
-	if (GetCharacterMovement()) //获取角色移动组件
+	if (GetCharacterMovement())    // 获取角色移动组件
 	{
 		// 初始化默认移动速度
 		GetCharacterMovement()->MaxWalkSpeed = RunSpeed;
 
-		//初始化最大加速度
+		// 初始化最大加速度
 		GetCharacterMovement()->MaxAcceleration = DefaultMaxAcceleration;
 
 		// 初始化地面摩擦力
@@ -106,7 +103,7 @@ APlayerMaster::APlayerMaster()
 
 }
 
-// Called when the game starts or when spawned
+// 初始化：注册 ASC 的 ActorInfo、配置制动、授予连招能力、生成武器、绑定生命归零回调
 void APlayerMaster::BeginPlay()
 {
 	Super::BeginPlay();
@@ -131,7 +128,7 @@ void APlayerMaster::BeginPlay()
 			FGameplayAbilitySpec(AttackAbilityClass, 1, INDEX_NONE, this));
 	}
 
-	//缓存武器组件，统一判空
+	// 缓存武器组件，统一判空
 	if(WeaponComponent)
 		WeaponComponent->SpawnAndAttachWeapon();
 
@@ -139,7 +136,7 @@ void APlayerMaster::BeginPlay()
 		AttributeSet->OnOutOfHealth.AddDynamic(this, &APlayerMaster::HandleOutOfHealth);
 }
 
-
+// 服务器侧被控制器占有时调用（重新初始化 ASC ActorInfo 并创建 HUD）
 void APlayerMaster::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
@@ -181,11 +178,13 @@ void APlayerMaster::TryCreateHUD()
 	HUDWidget->InitializeHUD(this);
 }
 
+// IAbilitySystemInterface 实现：对外暴露 ASC
 UAbilitySystemComponent* APlayerMaster::GetAbilitySystemComponent() const
 {
 	return AbilitySystemComponent;
 }
 
+// 注册需要复制的属性：移动档位、权威移动状态、死亡状态
 void APlayerMaster::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -201,7 +200,7 @@ void APlayerMaster::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	DOREPLIFETIME(APlayerMaster, bDead);
 }
 
-// Called every frame需要时启用
+// 每帧：服务器刷新权威移动状态，所有端更新转向状态机
 void APlayerMaster::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -238,11 +237,10 @@ void APlayerMaster::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 
 }
 
-
-//更新移动速度和状态
+// 更新移动速度和状态
 void APlayerMaster::ModifyMaxWalkSpeed(EMoveSpeedState PreviousState)
 {
-	//根据冲刺状态设定移动速度
+	// 根据冲刺状态设定移动速度
 	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
 	{
 		Movement->MaxWalkSpeed = GetCurrentWalkSpeed();
@@ -309,7 +307,7 @@ void APlayerMaster::Server_ApplyPivotAcceleration_Implementation()
 	}
 }
 
-//获取当前移动速度
+// 获取当前移动速度
 float APlayerMaster::GetCurrentWalkSpeed() const
 {
 	switch (MoveSpeedState)
@@ -321,7 +319,7 @@ float APlayerMaster::GetCurrentWalkSpeed() const
 	}
 }
 
-//每帧更新转向状态机，只负责「完成判定」
+// 每帧更新转向状态机，只负责「完成判定」
 void APlayerMaster::UpdateTurnState(float DeltaTime)
 {
 	if (!bIsTurning)
@@ -397,16 +395,9 @@ bool APlayerMaster::TryInterruptCombo()
 	if (!bComboInterruptAllowed) return false;
 	bComboInterruptAllowed = false;
 
-	if (AbilitySystemComponent)
-	{
-		// 发「中断请求」事件，由 GA_Attack 自己决策：
-		// 有缓冲攻击 → 忽略中断（缓冲优先）；无缓冲 → 真正 EndCombo
-		FGameplayEventData EventData;
-		EventData.Instigator = this;
-		EventData.Target = this;
-		AbilitySystemComponent->HandleGameplayEvent(
-			AlphaGameplayTags::Combo_InterruptRequest, &EventData);
-	}
+	// 发「中断请求」事件，由 GA_Attack 自己决策：
+	// 有缓冲攻击 → 忽略中断（缓冲优先）；无缓冲 → 真正 EndCombo
+	SendGameplayEvent(AlphaGameplayTags::Combo_InterruptRequest);
 	return true;
 }
 
@@ -529,12 +520,14 @@ void APlayerMaster::Multi_Die_Implementation()
 	}
 }
 
+// 请求复活：内部转发 Server RPC，调用处不必判 HasAuthority
 void APlayerMaster::RequestRevive()
 {
 	// Server RPC：服务器上调用会直接本地执行，客户端上调用自动转发。
 	Server_RequestRevive();
 }
 
+// 服务器实际执行复活（Server RPC 实现）
 void APlayerMaster::Server_RequestRevive_Implementation()
 {
 	if (!HasAuthority()) return;   // Server RPC 必在服务器执行，这是防御性写法
@@ -626,7 +619,18 @@ void APlayerMaster::Multi_Revive_Implementation()
 	//    bDead 已置 false，下一帧就会恢复正常更新。
 }
 
-//动画通知事件触发
+// 以自身为 Instigator / Target 发送动画事件（连招 / 衍生 / 中断窗口的统一入口）
+void APlayerMaster::SendGameplayEvent(const FGameplayTag& EventTag) const
+{
+	if (!AbilitySystemComponent) return;
+
+	FGameplayEventData EventData;
+	EventData.Instigator = this;
+	EventData.Target = this;
+	AbilitySystemComponent->HandleGameplayEvent(EventTag, &EventData);
+}
+
+// 动画通知事件触发
 void APlayerMaster::HandleAnimEvent(EAnimEventType EventType)
 {
 	switch (EventType)
@@ -642,28 +646,18 @@ void APlayerMaster::HandleAnimEvent(EAnimEventType EventType)
 			WeaponComponent->AttachWeaponToBack();  // 转发收起武器
 		break;
 
-
 	case EAnimEventType::ComboInterruptAllowed:
-		bComboInterruptAllowed = true;  //可以中断连招
+		bComboInterruptAllowed = true;  // 可以中断连招
 		break;
 
 	case EAnimEventType::ComboBufferWindowOpen:
 		// 缓冲窗口打开：转发给 GAS，让 GA_Attack 开始接受缓冲输入
-		if (AbilitySystemComponent)
-		{
-			FGameplayEventData EventData;
-			EventData.Instigator = this;
-			EventData.Target = this;
-			AbilitySystemComponent->HandleGameplayEvent(
-				AlphaGameplayTags::Combo_BufferWindowOpen, &EventData);
-		}
+		SendGameplayEvent(AlphaGameplayTags::Combo_BufferWindowOpen);
 		break;
 
 	default:
 		break;
 	}
-
-	
 }
 
 // 动画状态通知（区间型）：进入状态，统一分发
@@ -672,29 +666,13 @@ void APlayerMaster::HandleAnimStateBegin(EAnimNotifyStateType StateType)
 	switch (StateType)
 	{
 	case EAnimNotifyStateType::ComboDerivedWindow:
-	{
 		// 衍生窗口打开：转发给 GAS，让 GA_Attack 的 WaitGameplayEvent 收到
-		if (AbilitySystemComponent)
-		{
-			FGameplayEventData EventData;
-			EventData.Instigator = this;
-			EventData.Target = this;
-			AbilitySystemComponent->HandleGameplayEvent(
-				AlphaGameplayTags::Combo_DerivedWindow, &EventData);
-		}
+		SendGameplayEvent(AlphaGameplayTags::Combo_DerivedWindow);
 		break;
-	}
 
 	case EAnimNotifyStateType::ComboWindow:
 		// 连招窗口开启
-		if (AbilitySystemComponent)
-		{
-			FGameplayEventData EventData;
-			EventData.Instigator = this;
-			EventData.Target = this;
-			AbilitySystemComponent->HandleGameplayEvent(
-				AlphaGameplayTags::Combo_Window, &EventData);
-		}
+		SendGameplayEvent(AlphaGameplayTags::Combo_Window);
 		break;
 
 	case EAnimNotifyStateType::AttackHitWindow:
@@ -703,7 +681,6 @@ void APlayerMaster::HandleAnimStateBegin(EAnimNotifyStateType StateType)
 		if (!HasAuthority()) break;
 		if (WeaponComponent) WeaponComponent->EnableWeaponHitbox();
 		break;
-
 
 	default:
 		break;
@@ -716,29 +693,13 @@ void APlayerMaster::HandleAnimStateEnd(EAnimNotifyStateType StateType)
 	switch (StateType)
 	{
 	case EAnimNotifyStateType::ComboDerivedWindow:
-	{
 		// 衍生窗口关闭：过了此点不能再接衍生
-		if (AbilitySystemComponent)
-		{
-			FGameplayEventData EventData;
-			EventData.Instigator = this;
-			EventData.Target = this;
-			AbilitySystemComponent->HandleGameplayEvent(
-				AlphaGameplayTags::Combo_DerivedWindowEnd, &EventData);
-		}
+		SendGameplayEvent(AlphaGameplayTags::Combo_DerivedWindowEnd);
 		break;
-	}
 
 	case EAnimNotifyStateType::ComboWindow:
 		// 连招窗口关闭
-		if (AbilitySystemComponent)
-		{
-			FGameplayEventData EventData;
-			EventData.Instigator = this;
-			EventData.Target = this;
-			AbilitySystemComponent->HandleGameplayEvent(
-				AlphaGameplayTags::Combo_WindowEnd, &EventData);
-		}
+		SendGameplayEvent(AlphaGameplayTags::Combo_WindowEnd);
 		break;
 
 	case EAnimNotifyStateType::AttackHitWindow:
