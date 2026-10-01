@@ -1,11 +1,14 @@
 ﻿# Alpha
+<div align="center">
 
-![Unreal Engine](https://img.shields.io/badge/Unreal_Engine-5.8-0E1128?style=flat-square&logo=unrealengine&logoColor=white)
+![Unreal Engine](https://img.shields.io/badge/Unreal_Engine-5.8-0E1128?style=flat-square&logo=unrealengine&logoColor=white)<br>
 ![Language](https://img.shields.io/badge/Language-C%2B%2B-00599C?style=flat-square&logo=cplusplus&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white)
 ![Combat](https://img.shields.io/badge/Combat-GAS-4B4B4B?style=flat-square)
 ![Animation](https://img.shields.io/badge/Animation-Motion_Matching-8A2BE2?style=flat-square)
 ![Networking](https://img.shields.io/badge/Networking-Replication_%26_Server--Authoritative-2F6F4E?style=flat-square)
+
+</div>
 
 > 基于 **Unreal Engine 5.8 + C++** 开发的第三人称动作游戏 Demo。
 > 移动动画由 **Motion Matching（Pose Search）** 驱动，战斗与属性系统基于 **GAS（Gameplay Ability System）** 实现。
@@ -27,6 +30,24 @@
 | AI | Behavior Tree · Blackboard · AIPerception · Navigation |
 | 网络 | Actor / 属性 / GameState 复制 + 服务器权威判定（GAS） |
 | 版本管理 | Git + Git LFS（LFS 规则覆盖资产与媒体类型） |
+
+---
+
+## 快速导航
+
+| 想看什么 | 去哪 |
+|---|---|
+| 项目定位与技术栈 | [技术栈](#技术栈) |
+| 实现了哪些功能 | [核心特性](#核心特性) |
+| **值得看的代码与设计取舍** | [代码亮点](#代码亮点) · [文档详情](docs/CODE_HIGHLIGHTS.md) |
+| **开发中定位过的坑与根因** | [踩坑记录文档](docs/DEV_NOTES.md)（21 条，含引擎源码依据） |
+| 系统间调用关系 | [架构速览](#架构速览) |
+| 目录与文件划分 | [项目结构](#项目结构) |
+| 引擎与插件依赖 | [环境要求](#环境要求)（阅读 / 编译源码所需） |
+| 编译与运行 | [快速开始](#快速开始) |
+| 按键操作 | [操作说明](#操作说明) |
+| 已完成 / 计划中的功能 | [开发路线图](#开发路线图) |
+| 素材与许可说明 | [说明](#说明) |
 
 ---
 
@@ -136,6 +157,10 @@ flowchart LR
 | Motion Matching | Chooser 选库 + 远端速度幅值 / 方向分离 | `Source/Alpha/Private/Player/PlayerAnimInstance.cpp` |
 | UI 解耦 | 属性变化委托驱动血条，零 Tick 轮询 | `Source/Alpha/Private/UI/PlayerHUDWidget.cpp` |
 
+> 开发过程中定位过的坑与根因记录（21 条，含引擎源码依据）见 [docs/DEV_NOTES.md](docs/DEV_NOTES.md)。
+
+---
+
 ## 项目结构
 
 ```text
@@ -165,7 +190,7 @@ Alpha/
 
 ---
 
-## 环境要求（阅读 / 编译源码所需）
+## 环境要求
 
 - **Unreal Engine 5.8**（`Alpha.uproject` 的 `EngineAssociation` 即 5.8）
 - **Visual Studio 2022 17.14 或更高版本**（UE 5.8 的要求），勾选「使用 C++ 的游戏开发」工作负载
