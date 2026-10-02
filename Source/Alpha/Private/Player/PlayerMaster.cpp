@@ -171,6 +171,12 @@ void APlayerMaster::TryCreateHUD()
 	//   客户端上 → 只有自己拥有的 Pawn 的 PC 是本地
 	if (!PC->IsLocalController()) return;
 
+	// 进游戏关时把输入模式拉回游戏态：菜单关用的是 UIOnly + 显示鼠标。
+	// 放这里而不是 BeginPlay —— 客户端 BeginPlay 时 Controller 可能还没复制到达，
+	// 而本函数由 PossessedBy(服务器) / OnRep_Controller(客户端) 触发，两端都保证 PC 已就绪
+	PC->SetShowMouseCursor(false);
+	PC->SetInputMode(FInputModeGameOnly());
+
 	HUDWidget = CreateWidget<UPlayerHUDWidget>(PC, HUDWidgetClass);
 	if (!HUDWidget) return;
 
