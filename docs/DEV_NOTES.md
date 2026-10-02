@@ -73,7 +73,7 @@
 
 **根因**：死亡蒙太奇的 Slot 权重没有被复位（权重一直为 1），姿态被死亡动画持续覆盖。蒙太奇播完不等于权重归零。
 
-**修法**：复活流程中显式 `Montage_Stop`（相关说明见 `PlayerMaster.cpp:604` 附近注释）。
+**修法**：复活流程中显式 `Montage_Stop`（相关说明见 `PlayerMaster.cpp:608-610` 附近注释）。
 
 **教训**：涉及姿态残留时，不能依赖「动画播完自动回落」，要显式停。
 
@@ -97,7 +97,7 @@
 
 **根因**：`SetLooseGameplayTagCount` 是**幂等设定**（直接设为指定值），而递减式调用每次都会改变计数。两者混用或重复调用会破坏计数语义。
 
-**修法**：状态位统一用幂等方式 `SetLooseGameplayTagCount(..., 1)`（`PlayerMaster.cpp:578` 有注释说明）。
+**修法**：状态位统一用幂等方式 `SetLooseGameplayTagCount(..., 1)`（`PlayerMaster.cpp:583-585` 有注释说明）。
 
 **教训**：GAS 中标签计数有「设定」与「累加/递减」两种语义，不要当成同一个 API 使用。
 
@@ -168,7 +168,7 @@ PawnMovementComponent.cpp:77
 
 **根因**：默认的 `REPNOTIFY_OnChanged` 只在值发生变化时触发；「钳制回原值」时新旧值相同，`OnRep` 不触发，但 UI 确实需要同步。
 
-**修法**：在 `GetLifetimeReplicatedProps` 中使用 `DOREPLIFETIME_CONDITION_NOTIFY(..., COND_None, REPNOTIFY_Always)`（`AlphaAttributeSet.cpp:60-71`）。
+**修法**：在 `GetLifetimeReplicatedProps` 中使用 `DOREPLIFETIME_CONDITION_NOTIFY(..., COND_None, REPNOTIFY_Always)`（`AlphaAttributeSet.cpp:60-72`）。
 
 **教训**：涉及钳制 / 派生逻辑的属性，复制通知要用 `Always`。
 
@@ -180,7 +180,7 @@ PawnMovementComponent.cpp:77
 
 **根因**：把「远端也需要读」的状态按 `OwnerOnly` 复制，非 Owner 客户端拿不到数据。
 
-**修法**：需要跨端读取的状态使用 `COND_None`（见 `AlphaGameState.cpp:10`、`PlayerMaster.cpp:193/199` 的注释：「不能用 COND_OwnerOnly」）。
+**修法**：需要跨端读取的状态使用 `COND_None`（见 `AlphaGameState.cpp:11`、`PlayerMaster.cpp:199/205` 的注释：「不能用 COND_OwnerOnly」）。
 
 **教训**：复制条件的判断依据是「谁需要读」，不是「谁产生的」。
 
@@ -192,7 +192,7 @@ PawnMovementComponent.cpp:77
 
 **根因**：`bGameOver` 停留在 `true`，而 `NotifyPlayerDied` 有早退逻辑，后续判定被整体跳过。
 
-**修法**：`Revive()` 中调用 `AAlphaGameState::ClearGameOver()`（`PlayerMaster.cpp:556` 附近）。
+**修法**：`Revive()` 中调用 `AAlphaGameState::ClearGameOver()`（`PlayerMaster.cpp:568` 附近）。
 
 **教训**：全局状态位必须有明确的复位路径，否则早退逻辑会把它变成死锁。
 
@@ -202,7 +202,7 @@ PawnMovementComponent.cpp:77
 
 **现象**：客户端位置被 `ClientAdjustPosition` 拉回，出现位置回抽。
 
-**根因**：权威轨迹比客户端预测慢，误差累积后触发移动校正，把客户端拉回慢速轨迹（`PlayerMaster.cpp:303` 有说明）。
+**根因**：权威轨迹比客户端预测慢，误差累积后触发移动校正，把客户端拉回慢速轨迹（`PlayerMaster.cpp:309` 有说明）。
 
 **修法**：本项目采用**服务器权威 + 不做客户端预测**的路线，靠复制对齐状态，从设计上避免预测回滚。
 

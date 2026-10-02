@@ -152,7 +152,7 @@ void UGA_Attack::AdvanceCombo(EAttackHand Hand, bool bPressedInDerivedWindow)
     }
 ```
 
-**设计意图**：`ComboStep` 复用为「基础段 0~3 / 衍生段 0~1」两个命名空间，靠 `bInDerivedBranch` 区分语义；分支决策点收敛在 `ComboStep == 1` 一处，避免为衍生分支另建一套段号体系。
+**设计意图**：`ComboStep` 复用为「基础段 0 ~ 3 / 衍生段 0 ~ 1」两个命名空间，靠 `bInDerivedBranch` 区分语义；分支决策点收敛在 `ComboStep == 1` 一处，避免为衍生分支另建一套段号体系。
 
 ### 1.4 缓冲优先于中断
 
@@ -206,7 +206,7 @@ void UGA_Attack::OnInterruptRequest(FGameplayEventData Payload)
 
 ### 2.2 权威死亡入口 `Die()`
 
-**位置**：`Source/Alpha/Private/Player/PlayerMaster.cpp:436-461`
+**位置**：`Source/Alpha/Private/Player/PlayerMaster.cpp:441-467`
 
 ```cpp
 // 死亡：服务器权威入口，只判定 + 广播
@@ -242,7 +242,7 @@ void APlayerMaster::Die()
 
 ### 2.3 `Multi_Die`：各端本地赋值 + 标签授予
 
-**位置**：`Source/Alpha/Private/Player/PlayerMaster.cpp:464-487`
+**位置**：`Source/Alpha/Private/Player/PlayerMaster.cpp:469-484`（节选，后续还有关闭碰撞 / 锁输入 / 收武器命中盒三段）
 
 ```cpp
 // 死亡表现：各端各自执行
@@ -435,7 +435,7 @@ void UPlayerAnimInstance::EvaluateAnimChooser()
 
 ### 4.1 属性声明与归零委托
 
-**位置**：`Source/Alpha/Public/Combat/AlphaAttributeSet.h:22-46`
+**位置**：`Source/Alpha/Public/Combat/AlphaAttributeSet.h:23-46`
 
 ```cpp
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnOutOfHealthSignature);
@@ -468,7 +468,7 @@ public:
 
 ### 4.2 归零去重标记 `bOutOfHealth`
 
-**位置**：`Source/Alpha/Private/Combat/AlphaAttributeSet.cpp:20-48`
+**位置**：`Source/Alpha/Private/Combat/AlphaAttributeSet.cpp:20-57`
 
 ```cpp
 void UAlphaAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data)
@@ -515,7 +515,7 @@ void UAlphaAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallb
 
 ### 4.3 属性复制注册与 `REPNOTIFY_Always` 的取舍
 
-**位置**：`Source/Alpha/Private/Combat/AlphaAttributeSet.cpp:60-71`
+**位置**：`Source/Alpha/Private/Combat/AlphaAttributeSet.cpp:60-72`
 
 ```cpp
 void UAlphaAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -665,7 +665,7 @@ void UPlayerHUDWidget::InitializeHUD(APlayerMaster* InPlayer)
 
 ### 5.3 死亡状态 → 输入模式切换
 
-**位置**：`Source/Alpha/Private/UI/PlayerHUDWidget.cpp:94-113`
+**位置**：`Source/Alpha/Private/UI/PlayerHUDWidget.cpp:94-115`
 
 ```cpp
 void UPlayerHUDWidget::HandleDeadStateChanged(bool bIsDead)

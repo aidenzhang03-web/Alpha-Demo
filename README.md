@@ -13,23 +13,9 @@
 > 基于 **Unreal Engine 5.8 + C++** 开发的第三人称动作游戏 Demo。
 > 移动动画由 **Motion Matching（Pose Search）** 驱动，战斗与属性系统基于 **GAS（Gameplay Ability System）** 实现。
 >
-> 仓库用于展示 **C++ 实现**，入库内容为 `Source/`、`Config/`、`Alpha.uproject` 及工程配置
+> 仓库用于展示 **C++ 实现**，入库内容为 `Source/`、`Config/`、`docs/`、`Alpha.uproject` 及工程配置
 > （`.editorconfig` / `.vsconfig` / `.gitattributes`）与 `Plugins/VisualStudioTools`；
 > `Content/` 下的美术 / 蓝图 / 动画资产整体不入库（详见「快速开始」）。
-
----
-
-## 技术栈
-
-| 类别 | 使用 |
-|---|---|
-| 引擎 | Unreal Engine 5.8 |
-| 语言 | C++（输入 / UI 表现层配合 Enhanced Input、UMG 蓝图） |
-| 动画 | Motion Matching（Pose Search）+ Chooser |
-| 能力系统 | Gameplay Ability System（GAS） |
-| AI | Behavior Tree · Blackboard · AIPerception · Navigation |
-| 网络 | Actor / 属性 / GameState 复制 + 服务器权威判定（GAS） |
-| 版本管理 | Git + Git LFS（LFS 规则覆盖资产与媒体类型） |
 
 ---
 
@@ -51,7 +37,27 @@
 
 ---
 
+## 技术栈
+
+| 类别 | 使用 |
+|---|---|
+| 引擎 | Unreal Engine 5.8 |
+| 语言 | C++（输入 / UI 表现层配合 Enhanced Input、UMG 蓝图） |
+| 动画 | Motion Matching（Pose Search）+ Chooser |
+| 能力系统 | Gameplay Ability System（GAS） |
+| AI | Behavior Tree · Blackboard · AIPerception · Navigation |
+| 网络 | Actor / 属性 / GameState 复制 + 服务器权威判定（GAS） |
+| 版本管理 | Git + Git LFS（LFS 规则覆盖资产与媒体类型） |
+
+---
+
 ## 核心特性
+
+### 启动流程与主菜单
+- 菜单关卡由 `AMenuGameMode` + `AMenuPlayerController` 承载，界面类 `UMainMenuWidget` 在蓝图子类 `BP_MenuPlayerController` 中指定（C++ 侧不硬编码资源路径）
+- `UMainMenuWidget` 用 `UWidgetSwitcher` 分主菜单 / 设置 / 键位说明三页，按钮只做转发，视觉布局在 `WBP_MainMenu`
+- 设置页对接引擎 `GameUserSettings`：分辨率 / 窗口模式 / 主音量，滑条即时生效，其余由「应用」写入并保存
+- 开始游戏走 `AMenuPlayerController::StartGame()`（默认 `ServerTravel` 带 `?listen`，联机时由服务器带客户端一起换关）；进入战斗关后由 `APlayerMaster::TryCreateHUD()` 把输入模式拉回 `GameOnly`，与死亡面板的 `UIOnly` 切换成对
 
 ### 移动
 - 三档位（走 / 跑步 / 冲刺）点按切换
@@ -179,11 +185,12 @@ Alpha/
 │       │   ├── Combat/        # GAS：属性 / 能力 / 标签 / 连招
 │       │   ├── Enemy/         # 敌人角色与动画实例
 │       │   ├── Player/        # 玩家角色 / 输入组件 / 动画实例
-│       │   ├── UI/            # HUD 与敌人血条
+│       │   ├── UI/            # HUD / 敌人血条 / 主菜单
 │       │   ├── Weapon/        # 武器基类与武器组件
 │       │   ├── AlphaGameMode.h
 │       │   └── AlphaGameState.h
 │       └── Private/           # 实现文件（目录结构与 Public 镜像）
+├── docs/                      # 代码亮点与踩坑记录文档
 ├── Content/                   # 资产目录，整体不入库（本地开发时存在）
 └── Alpha.uproject
 ```
@@ -253,6 +260,7 @@ Alpha/
 - [x] 网络复制与服务器权威（Actor / 属性 / 能力）
 - [x] 玩家死亡与团灭结算（权威死亡链路 + 状态复制 + 结算 UI）
 - [x] 玩家复活（个人独立死亡面板 + 多播恢复，各端互不影响）
+- [x] 启动流程与主菜单（主菜单 / 设置 / 键位说明 → 开始游戏换关）
 
 **计划中**
 - [ ] 玩家受击表现（受击动画 / 硬直，敌人侧已完成 `GA_HitReact`）
